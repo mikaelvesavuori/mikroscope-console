@@ -4,8 +4,8 @@ dist/
 coverage/
 data/
 .claude/
-docs/
 .wrangler/
+release/
 
 # Files
 .env

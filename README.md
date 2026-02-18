@@ -1,151 +1,141 @@
 # MikroScope Console
 
-MikroScope Console is the optional UI for exploring MikroScope logs.
+**A minimal, fast log console for [MikroScope](https://github.com/mikaelvesavuori/mikroscope).**
 
-It is a static frontend focused on fast debugging:
+MikroScope Console is a static web UI for investigating logs, correlations, and time patterns without running a heavy observability stack.
 
-- stream view with expand/collapse log details
-- correlation/trace drilldowns
-- timeline histogram and quick filters
-- saved queries in browser localStorage
+## Requirements
 
-## Purpose
+| Requirement | Default | Notes |
+| --- | --- | --- |
+| MikroScope API | `http://127.0.0.1:4310` | Must expose `/api/logs` and `/api/logs/aggregate` |
+| Browser | Modern Chromium/Firefox/Safari | JavaScript required |
+| Static hosting | Any web server/CDN | Console is a static frontend |
 
-Use the console when you want quick, visual investigation over MikroScope data without introducing a heavy observability stack.
+## At A Glance
 
-## Prerequisites
+| Capability | What you can do | Why it helps |
+| --- | --- | --- |
+| Stream | Browse logs with expandable rows and load-more pagination | Fast triage on large result sets |
+| Inspect | Jump directly to `correlationId` or `requestId`, then refine with local filter/sort | Isolate one trace quickly |
+| Correlations | View grouped correlation cards with error counts and copy IDs/chain JSON | Follow a request path end-to-end |
+| Timeline | Drill down by time bucket (auto-fit or manual) | Spot bursts and scope precisely |
+| Saved Query + URL Path | Save common queries and copy a shareable view path | Reuse and share investigations |
+| Keyboard + Command Palette | Drive core actions without mouse-only workflows | Higher operator throughput |
 
-- Node.js `>= 24`
-- MikroScope API (default: `http://127.0.0.1:4310`)
-- npm
+## Quick Start
 
-## Install
+| Setup path | Best for | Command |
+| --- | --- | --- |
+| One-line installer (recommended) | Running the console quickly | `curl -fsSL https://raw.githubusercontent.com/mikaelvesavuori/mikroscope-console/main/install.sh -o install.sh && sh install.sh && rm install.sh` |
+| One-line installer (specific version) | Pinned deployments | `curl -fsSL https://raw.githubusercontent.com/mikaelvesavuori/mikroscope-console/main/install.sh -o install.sh && sh install.sh --version vX.Y.Z --dir /srv/mikroscope-console && rm install.sh` |
+| Manual release bundle | Offline/manual deployment flow | Download from [GitHub Releases](https://github.com/mikaelvesavuori/mikroscope-console/releases) |
+| Local development | Editing the UI | `npm install && npm start` |
 
-```bash
-npm install
-```
+After installation (release bundle path):
 
-## Quick Start (Local Dev)
-
-From repository root:
-
-```bash
-# Terminal 1: start MikroScope API
-npm run mikroscope:serve
-
-# Terminal 2: serve console static files
-npm run mikroscope-console:serve
-```
-
-Open:
-
-```text
-http://127.0.0.1:4320/
-```
-
-## Build
-
-```bash
-npm run build
-```
-
-Build output:
-
-```text
-dist/
-```
+| Step | Action |
+| --- | --- |
+| 1 | Edit `public/config.json` and set `apiOrigin` to your MikroScope API |
+| 2 | Serve static files, for example: `npx http-server public -p 4320 -c-1` |
+| 3 | Open `http://127.0.0.1:4320/` |
 
 ## Configuration
 
-Edit:
+| File | When to edit |
+| --- | --- |
+| `public/config.json` | Running from a prebuilt release bundle |
+| `src/config.json` | Running from this repository in local development |
 
-```text
-mikroscope-console/src/config.json
-```
+| Key | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `apiOrigin` | string (URL) | Yes | `http://127.0.0.1:4310` | Base URL of your MikroScope API |
 
 Example:
 
 ```json
 {
-  "apiOrigin": "http://127.0.0.1:4310"
+  "apiOrigin": "https://logs.example.com"
 }
 ```
 
-Fields:
+## Daily Usage
 
-- `apiOrigin`: base URL for MikroScope API
+| Goal | Where | Action |
+| --- | --- | --- |
+| Fetch logs in a time window | Query Controls | Set `From`, `To`, optional filters, then run query |
+| Investigate one trace | Inspect | Set key (`Auto`/`correlationId`/`requestId`) and value, then `Go to Trace` |
+| Narrow by traffic spikes | Timeline | Open Timeline, click bucket to drill down, click again to clear |
+| Reuse common filters | Query Controls > Advanced | Save query, select saved query, run |
+| Share an exact view | Advanced or keyboard | Click `Copy View URL` or press `U` |
+| Work in expanded stream | Workspace | Press `Space` or click expand icon |
 
-## Testing (Reproducible)
+## Keyboard Shortcuts
 
-Tests run with Vitest + Happy DOM and use **real HTTP requests** against local test servers.
-No network calls to `localhost:4310` are required during test runs.
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl/Cmd + K` | Open command palette |
+| `Q` | Toggle query controls |
+| `I` | Toggle inspect panel |
+| `S` | Open stream tab |
+| `C` | Open correlations tab |
+| `T` | Open timeline tab |
+| `U` | Copy current view URL path |
+| `Enter` | Run query |
+| `Space` | Toggle expanded stream |
+| `?` | Toggle shortcuts help |
 
-1. Capture fixture data from a real running API once:
+Shortcuts are ignored while typing in editable controls.
 
-```bash
-npm run fixtures:capture
-```
+## Shareable View URL Parameters
 
-This writes:
+The copied URL path keeps query state in URL parameters.
 
-```text
-tests/fixtures/logs.fixture.json
-```
+| Parameter | Example | Meaning |
+| --- | --- | --- |
+| `from` | `2026-02-18T00:00:00.000Z` | Start timestamp (ISO-8601) |
+| `to` | `2026-02-18T23:59:59.999Z` | End timestamp (ISO-8601) |
+| `level` | `ERROR` | Log level filter |
+| `audit` | `true` | Audit filter (`true`/`false`) |
+| `field` | `correlationId` | Field used with `value` |
+| `value` | `8b5a...` | Filter value (contains match) |
+| `limit` | `1000` | Server-side limit (`1-1000`) |
 
-2. Run tests:
+## MikroScope API Compatibility
 
-```bash
-npm test
-```
+| Endpoint | Method | Used for | Required response fields |
+| --- | --- | --- | --- |
+| `/api/logs` | `GET` | Main stream query and pagination | `entries` (array), `hasMore` (boolean), `nextCursor` (string/null) |
+| `/api/logs/aggregate` | `GET` | Insights/cards (`level`, `event`, `component`, `correlation`) | `buckets` (array of `{ key, count }`) |
 
-3. Run with coverage:
+## Deploying
 
-```bash
-npm run test:coverage
-```
+Because it is static, you can host it on any static web server or CDN.
 
-## Usage
-
-Main flows:
-
-- **Query Controls**: set `from/to/level/audit/limit` and run
-- **Inspect**: jump directly to `correlationId` / `requestId` and tune local filters
-- **Correlations**: inspect grouped traces and error counts
-- **Timeline**: click buckets to scope the stream locally
-- **Saved Queries**: save/select/delete common filters
-
-Notes:
-
-- Server query `limit` is capped at `1000`
-- Saved queries are local to the browser profile
-- Run button is disabled while data is loading
-
-## Guides
-
-- Getting started: `docs/GETTING_STARTED.md`
-- Testing and fixtures: `docs/TESTING.md`
-
-## Deployment Example
-
-Because it is static, deploy with any web server (Caddy, Nginx, object storage + CDN, etc.).
+| Target | Notes |
+| --- | --- |
+| Nginx / Caddy / Apache | Serve `public/` from release bundle or `dist/` from local build |
+| Object storage + CDN | Upload static files and cache aggressively |
+| Local troubleshooting | `npx http-server public -p 4320 -c-1` |
 
 Minimal Caddy example:
 
 ```caddyfile
 console.example.com {
-  root * /srv/orderbutler/mikroscope-console/public
+  root * /srv/mikroscope-console/public
   file_server
 }
 ```
 
-Set `apiOrigin` in `config.json` to the reachable MikroScope API URL.
+## Troubleshooting
 
-## Related
+| Problem | Likely cause | Fix |
+| --- | --- | --- |
+| No logs appear | `apiOrigin` wrong or API unavailable | Verify `config.json` and test API reachability |
+| Query loads but cards are empty | Aggregate endpoint unavailable | Check `/api/logs/aggregate` on backend |
+| Timeline looks empty | Timestamps missing/invalid in returned logs | Ensure entries include parseable timestamps |
+| CORS/network errors in browser devtools | API not allowing frontend origin | Allow CORS for your console host |
 
-Backend sidecar and API:
+## Maintainers
 
-- `mikroscope/README.md`
-
-Operational runbook (backup/restore):
-
-- `mikroscope/OPS_RUNBOOK.md`
+Developer and release workflows are documented in `docs/MAINTAINERS.md`.

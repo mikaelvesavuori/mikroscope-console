@@ -11,6 +11,7 @@
     "start": "npx http-server src -p 4320 -c-1",
     "clean": "rm -rf dist",
     "build": "npm run clean && node esbuild.config.mjs",
+    "package:release": "node scripts/package-release.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
