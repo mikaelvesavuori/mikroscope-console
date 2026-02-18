@@ -1,0 +1,33 @@
+{
+  "name": "mikroscope-console",
+  "version": "1.0.0",
+  "description": "MikroScope Console is the optional UI for exploring MikroScope logs.",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "npx http-server src -p 4320 -c-1",
+    "clean": "rm -rf dist",
+    "build": "npm run clean && node esbuild.config.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "fixtures:capture": "node scripts/capture-test-fixture.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2",
+    "@types/node": "24",
+    "@vitest/coverage-v8": "4",
+    "esbuild": "latest",
+    "happy-dom": "20",
+    "html-minifier-terser": "7",
+    "http-server": "14",
+    "husky": "9",
+    "lightningcss": "1",
+    "tsx": "4",
+    "typescript": "5",
+    "vitest": "4"
+  }
+}
