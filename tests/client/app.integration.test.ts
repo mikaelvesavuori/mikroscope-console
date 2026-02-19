@@ -382,10 +382,12 @@ describe.sequential("MikroScope Console Integration", () => {
   test("supports panel/help keyboard toggles", async () => {
     const queryDetails = document.querySelector(".query-details") as HTMLDetailsElement;
     const inspectDetails = document.querySelector(".inspect-panel") as HTMLDetailsElement;
+    const insightsDetails = document.querySelector(".insights-details") as HTMLDetailsElement;
     const shortcutsModal = document.getElementById("shortcuts-modal") as HTMLDialogElement;
 
     const initialQueryOpen = queryDetails.open;
     const initialInspectOpen = inspectDetails.open;
+    const initialInsightsOpen = insightsDetails.open;
 
     dispatchShortcut("q");
     expect(queryDetails.open).toBe(!initialQueryOpen);
@@ -396,6 +398,11 @@ describe.sequential("MikroScope Console Integration", () => {
     expect(inspectDetails.open).toBe(!initialInspectOpen);
     dispatchShortcut("i");
     expect(inspectDetails.open).toBe(initialInspectOpen);
+
+    dispatchShortcut("n");
+    expect(insightsDetails.open).toBe(!initialInsightsOpen);
+    dispatchShortcut("n");
+    expect(insightsDetails.open).toBe(initialInsightsOpen);
 
     dispatchShortcut("?");
     expect(shortcutsModal.open).toBe(true);

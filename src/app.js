@@ -89,6 +89,7 @@
     scopeTrail: document.getElementById("scope-trail"),
     workspacePanel: document.querySelector(".workspace-panel"),
     inspectDetails: document.querySelector(".inspect-panel"),
+    insightsDetails: document.querySelector(".insights-details"),
     traceClearButton: document.getElementById("trace-clear-button"),
     traceField: document.getElementById("trace-field"),
     traceGoButton: document.getElementById("trace-go-button"),
@@ -246,10 +247,43 @@
       });
   }
 
+  function getLocalStorageSafe() {
+    try {
+      const storage = window.localStorage;
+      if (!storage) return null;
+      if (typeof storage.getItem !== "function") return null;
+      if (typeof storage.setItem !== "function") return null;
+      return storage;
+    } catch {
+      return null;
+    }
+  }
+
+  function readStorageItem(key) {
+    const storage = getLocalStorageSafe();
+    if (!storage) return null;
+    try {
+      return storage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  function writeStorageItem(key, value) {
+    const storage = getLocalStorageSafe();
+    if (!storage) return false;
+    try {
+      storage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function toggleThemeNow() {
     const currentTheme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
     const nextTheme = currentTheme === "dark" ? "light" : "dark";
-    window.localStorage.setItem(STORAGE_KEY_THEME, nextTheme);
+    writeStorageItem(STORAGE_KEY_THEME, nextTheme);
     applyTheme(nextTheme);
   }
 
@@ -310,6 +344,9 @@
     const inspectPanelAction = elements.inspectDetails?.open
       ? "Hide inspect panel"
       : "Show inspect panel";
+    const insightsPanelAction = elements.insightsDetails?.open
+      ? "Hide insights panel"
+      : "Show insights panel";
     const streamModalAction = elements.streamModal?.open
       ? "Close expanded stream"
       : "Open expanded stream";
@@ -381,6 +418,14 @@
         keywords: "inspect panel open close",
         shortcut: "I",
         run: () => toggleDetailsPanel(elements.inspectDetails),
+      },
+      {
+        id: "toggle-insights-panel",
+        label: insightsPanelAction,
+        detail: "Toggle insights panel",
+        keywords: "insights panel open close",
+        shortcut: "N",
+        run: () => toggleDetailsPanel(elements.insightsDetails),
       },
       {
         id: "toggle-stream-expanded",
@@ -610,6 +655,11 @@
     if (key === "i") {
       event.preventDefault();
       toggleDetailsPanel(elements.inspectDetails);
+      return;
+    }
+    if (key === "n") {
+      event.preventDefault();
+      toggleDetailsPanel(elements.insightsDetails);
       return;
     }
     if (key === "s") {
@@ -1033,9 +1083,7 @@
   }
 
   function persistRecentScopes() {
-    try {
-      window.localStorage.setItem(STORAGE_KEY_RECENT_SCOPES, JSON.stringify(state.recentScopes));
-    } catch {
+    if (!writeStorageItem(STORAGE_KEY_RECENT_SCOPES, JSON.stringify(state.recentScopes))) {
       setStatus("Could not persist recent scopes.");
     }
   }
@@ -1186,7 +1234,7 @@
 
   function loadRecentScopes() {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY_RECENT_SCOPES);
+      const raw = readStorageItem(STORAGE_KEY_RECENT_SCOPES);
       if (!raw) {
         state.recentScopes = [];
         renderRecentScopes();
@@ -1377,7 +1425,7 @@
   }
 
   function resolveInitialTheme() {
-    const stored = window.localStorage.getItem(STORAGE_KEY_THEME);
+    const stored = readStorageItem(STORAGE_KEY_THEME);
     if (stored === "light" || stored === "dark") return stored;
     return themeMediaQuery.matches ? "dark" : "light";
   }
@@ -1915,7 +1963,7 @@
 
     if (!manualMode || naturalWidth < availablePlotWidth) {
       const gapRatio = manualMode ? 0.18 : 0.22;
-      let barGap =
+      const barGap =
         safeBucketCount <= 1
           ? 0
           : clamp((availablePlotWidth / safeBucketCount) * gapRatio, minGap, maxGap);
@@ -2761,16 +2809,14 @@
   }
 
   function persistSavedQueries() {
-    try {
-      window.localStorage.setItem(STORAGE_KEY_SAVED_QUERIES, JSON.stringify(state.savedQueries));
-    } catch {
+    if (!writeStorageItem(STORAGE_KEY_SAVED_QUERIES, JSON.stringify(state.savedQueries))) {
       setStatus("Could not persist saved queries in localStorage.");
     }
   }
 
   function loadSavedQueries() {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY_SAVED_QUERIES);
+      const raw = readStorageItem(STORAGE_KEY_SAVED_QUERIES);
       if (!raw) {
         state.savedQueries = [];
         renderSavedQueries();
@@ -3452,7 +3498,7 @@
     });
 
     themeMediaQuery.addEventListener("change", (event) => {
-      const hasManualTheme = Boolean(window.localStorage.getItem(STORAGE_KEY_THEME));
+      const hasManualTheme = Boolean(readStorageItem(STORAGE_KEY_THEME));
       if (hasManualTheme) return;
       applyTheme(event.matches ? "dark" : "light");
     });

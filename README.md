@@ -77,6 +77,7 @@ Example:
 | `Ctrl/Cmd + K` | Open command palette |
 | `Q` | Toggle query controls |
 | `I` | Toggle inspect panel |
+| `N` | Toggle insights panel |
 | `S` | Open stream tab |
 | `C` | Open correlations tab |
 | `T` | Open timeline tab |

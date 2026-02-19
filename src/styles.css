@@ -62,6 +62,27 @@
   --tab-active-bg: #ffffff;
   --tab-active-text: #111721;
   --tab-active-border: #cad2df;
+  --badge-error-text: #8f0f28;
+  --badge-error-bg: #ffe0e6;
+  --badge-error-border: #f06f87;
+  --badge-warn-text: #744200;
+  --badge-warn-bg: #ffebc9;
+  --badge-warn-border: #f1b45d;
+  --badge-info-text: #0f6f44;
+  --badge-info-bg: #dbf7e8;
+  --badge-info-border: #62cb94;
+  --badge-debug-text: #0f4f98;
+  --badge-debug-bg: #e0edff;
+  --badge-debug-border: #79a9ed;
+  --pill-accent-text: #174aa3;
+  --pill-accent-bg: #dce8ff;
+  --pill-accent-border: #7299e3;
+  --pill-ok-text: #116f45;
+  --pill-ok-bg: #dcf6e8;
+  --pill-ok-border: #72d1a1;
+  --pill-danger-text: #9e1730;
+  --pill-danger-bg: #ffe1e8;
+  --pill-danger-border: #ec8498;
   color-scheme: light;
 }
 
@@ -86,6 +107,27 @@
   --tab-active-bg: #151a22;
   --tab-active-text: #eef3fb;
   --tab-active-border: #3a4659;
+  --badge-error-text: #ffd9e0;
+  --badge-error-bg: #5a2431;
+  --badge-error-border: #ff8599;
+  --badge-warn-text: #ffe2bd;
+  --badge-warn-bg: #5b3d0f;
+  --badge-warn-border: #f5b764;
+  --badge-info-text: #d2fae7;
+  --badge-info-bg: #1d533b;
+  --badge-info-border: #70d9a4;
+  --badge-debug-text: #dbe9ff;
+  --badge-debug-bg: #1c3f6b;
+  --badge-debug-border: #84b3ff;
+  --pill-accent-text: #dce8ff;
+  --pill-accent-bg: #1e3866;
+  --pill-accent-border: #86abff;
+  --pill-ok-text: #d7fbe9;
+  --pill-ok-bg: #1f513b;
+  --pill-ok-border: #7be0b0;
+  --pill-danger-text: #ffdce3;
+  --pill-danger-bg: #5b2432;
+  --pill-danger-border: #ff93a5;
   color-scheme: dark;
 }
 
@@ -746,19 +788,19 @@ button.scope-trail-item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  border: 1px solid var(--pill-accent-border);
   border-radius: 4px;
   min-height: 22px;
   padding: 2px 6px;
-  background: color-mix(in srgb, var(--accent-soft) 74%, var(--card-bg));
+  background: var(--pill-accent-bg);
   font-size: 11px;
-  color: var(--accent-strong);
+  color: var(--pill-accent-text);
 }
 
 .query-chip button {
   border: 0;
   background: transparent;
-  color: var(--accent-strong);
+  color: var(--pill-accent-text);
   cursor: pointer;
   font-size: 11px;
   line-height: 1;
@@ -1022,30 +1064,32 @@ button.scope-trail-item {
   border: 1px solid var(--line);
   font-family: var(--font-mono);
   font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .level-error {
-  color: var(--danger);
-  border-color: #f3c7cf;
-  background: #feeef1;
+  color: var(--badge-error-text);
+  border-color: var(--badge-error-border);
+  background: var(--badge-error-bg);
 }
 
 .level-warn {
-  color: var(--warn);
-  border-color: #f0dcc2;
-  background: #fff6e8;
+  color: var(--badge-warn-text);
+  border-color: var(--badge-warn-border);
+  background: var(--badge-warn-bg);
 }
 
 .level-info {
-  color: var(--ok);
-  border-color: #cae9d8;
-  background: #effaf4;
+  color: var(--badge-info-text);
+  border-color: var(--badge-info-border);
+  background: var(--badge-info-bg);
 }
 
 .level-debug {
-  color: #245d9f;
-  border-color: #cde0f5;
-  background: #eef6ff;
+  color: var(--badge-debug-text);
+  border-color: var(--badge-debug-border);
+  background: var(--badge-debug-bg);
 }
 
 .correlation-grid {
@@ -1070,9 +1114,9 @@ button.scope-trail-item {
 }
 
 .correlation-pill {
-  border: 1px solid color-mix(in srgb, var(--accent) 58%, var(--line));
-  background: color-mix(in srgb, var(--accent-soft) 72%, var(--card-bg));
-  color: var(--accent-strong);
+  border: 1px solid var(--pill-accent-border);
+  background: var(--pill-accent-bg);
+  color: var(--pill-accent-text);
   border-radius: 4px;
   padding: 3px 6px;
   font-family: var(--font-mono);
@@ -1122,15 +1166,15 @@ button.scope-trail-item {
 }
 
 .correlation-log-row:hover {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
-  background: color-mix(in srgb, var(--accent-soft) 24%, var(--card-bg));
+  border-color: var(--pill-accent-border);
+  background: color-mix(in srgb, var(--pill-accent-bg) 78%, var(--card-bg));
 }
 
 .correlation-log-count-pill {
-  border: 1px solid color-mix(in srgb, var(--accent) 44%, var(--line));
+  border: 1px solid var(--pill-accent-border);
   border-radius: 4px;
-  background: color-mix(in srgb, var(--accent-soft) 64%, var(--card-bg));
-  color: var(--accent-strong);
+  background: var(--pill-accent-bg);
+  color: var(--pill-accent-text);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
@@ -1179,15 +1223,15 @@ button.scope-trail-item {
 }
 
 .correlation-error-pill.is-zero {
-  background: color-mix(in srgb, var(--ok) 14%, var(--card-bg));
-  border-color: color-mix(in srgb, var(--ok) 42%, var(--line));
-  color: var(--ok);
+  background: var(--pill-ok-bg);
+  border-color: var(--pill-ok-border);
+  color: var(--pill-ok-text);
 }
 
 .correlation-error-pill.is-error {
-  background: color-mix(in srgb, var(--danger) 14%, var(--card-bg));
-  border-color: color-mix(in srgb, var(--danger) 44%, var(--line));
-  color: var(--danger);
+  background: var(--pill-danger-bg);
+  border-color: var(--pill-danger-border);
+  color: var(--pill-danger-text);
 }
 
 .empty-state {
