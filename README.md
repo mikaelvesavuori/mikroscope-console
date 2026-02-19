@@ -1,6 +1,6 @@
 # MikroScope Console
 
-**A minimal, fast log console for [MikroScope](https://github.com/mikaelvesavuori/mikroscope).**
+**A sharp, self-hosted console for [MikroScope](https://github.com/mikaelvesavuori/mikroscope) that turns logs into instant queries, timelines, and actionable alerts.**
 
 MikroScope Console is a static web UI for investigating logs, correlations, and time patterns without running a heavy observability stack.
 
@@ -8,9 +8,19 @@ MikroScope Console is a static web UI for investigating logs, correlations, and 
 
 | Requirement | Default | Notes |
 | --- | --- | --- |
-| MikroScope API | `http://127.0.0.1:4310` | Must expose `/api/logs` and `/api/logs/aggregate` |
+| MikroScope API | `http://127.0.0.1:4310` | Must expose `/api/logs`; aggregate/alert endpoints enable extra features |
 | Browser | Modern Chromium/Firefox/Safari | JavaScript required |
 | Static hosting | Any web server/CDN | Console is a static frontend |
+
+## Feature Availability
+
+| Feature area | Required backend endpoints | If endpoint is missing |
+| --- | --- | --- |
+| Stream + Inspect + Correlations + Timeline | `/api/logs` | Core querying does not work |
+| Insights cards | `/api/logs/aggregate` | Insights panels show limited/empty card data |
+| Alert webhook status | `/health` | Status cards cannot refresh runtime policy/loop state |
+| Alert webhook config modal | `/openapi.json`, `/api/alerts/config` | Modal opens, but config controls are disabled until paths are detected |
+| Alert webhook test | `/api/alerts/test-webhook` | Save works, test action is disabled |
 
 ## At A Glance
 
@@ -20,6 +30,8 @@ MikroScope Console is a static web UI for investigating logs, correlations, and 
 | Inspect | Jump directly to `correlationId` or `requestId`, then refine with local filter/sort | Isolate one trace quickly |
 | Correlations | View grouped correlation cards with error counts and copy IDs/chain JSON | Follow a request path end-to-end |
 | Timeline | Drill down by time bucket (auto-fit or manual) | Spot bursts and scope precisely |
+| Alert Webhook Status | Inspect alert runtime + webhook policy from `/health` | Quick operational confidence without leaving the console |
+| Alert Webhook Config | Load and update alert webhook policy, then send a manual test webhook | Operate alerting setup directly in the console |
 | Saved Query + URL Path | Save common queries and copy a shareable view path | Reuse and share investigations |
 | Keyboard + Command Palette | Drive core actions without mouse-only workflows | Higher operator throughput |
 
@@ -69,6 +81,8 @@ Example:
 | Reuse common filters | Query Controls > Advanced | Save query, select saved query, run |
 | Share an exact view | Advanced or keyboard | Click `Copy View URL` or press `U` |
 | Work in expanded stream | Workspace | Press `Space` or click expand icon |
+| Check webhook alerting health | Insights | Open `Alert Webhook` card (or use command palette action) |
+| Manage alert webhook policy | Top bar > `Webhooks` | Use the modal to reload, save, test, and clear webhook URL |
 
 ## Keyboard Shortcuts
 
@@ -78,10 +92,12 @@ Example:
 | `Q` | Toggle query controls |
 | `I` | Toggle inspect panel |
 | `N` | Toggle insights panel |
+| `W` | Toggle webhook config modal |
 | `S` | Open stream tab |
 | `C` | Open correlations tab |
 | `T` | Open timeline tab |
 | `U` | Copy current view URL path |
+| `X` | Reset to baseline query |
 | `Enter` | Run query |
 | `Space` | Toggle expanded stream |
 | `?` | Toggle shortcuts help |
@@ -108,6 +124,11 @@ The copied URL path keeps query state in URL parameters.
 | --- | --- | --- | --- |
 | `/api/logs` | `GET` | Main stream query and pagination | `entries` (array), `hasMore` (boolean), `nextCursor` (string/null) |
 | `/api/logs/aggregate` | `GET` | Insights/cards (`level`, `event`, `component`, `correlation`) | `buckets` (array of `{ key, count }`) |
+| `/health` | `GET` | Alerting and webhook runtime status card | `alerting`, `alertPolicy` |
+| `/api/alerts/config` | `GET` | Load active alert webhook policy | `policy` |
+| `/api/alerts/config` | `PUT` | Save alert webhook policy updates | `policy` |
+| `/api/alerts/test-webhook` | `POST` | Send manual webhook test event | `ok`, `sentAt`, `targetUrl` |
+| `/openapi.json` | `GET` | Alert config endpoint discovery | `paths` including alert config/test operations |
 
 ## Deploying
 

@@ -92,6 +92,115 @@ describe.sequential("MikroScope Console Integration", () => {
     expect(getStatusText()).toMatch(/Loaded \d+ log entries/);
   });
 
+  test("loads alert webhook status from /health", async () => {
+    await waitForCondition(
+      () => (document.getElementById("webhook-alert-enabled")?.textContent || "").trim() !== "-",
+      { timeoutMs: 10_000, message: "Expected alert webhook health to load." },
+    );
+
+    const alertEnabled = document.getElementById("webhook-alert-enabled") as HTMLElement;
+    const webhookConfigured = document.getElementById("webhook-configured") as HTMLElement;
+    const loopRunning = document.getElementById("webhook-loop-running") as HTMLElement;
+    const timeoutRetry = document.getElementById("webhook-timeout-retry") as HTMLElement;
+    const statusNote = document.getElementById("webhook-status-note") as HTMLElement;
+
+    expect(alertEnabled.textContent).toBe("Enabled");
+    expect(webhookConfigured.textContent).toBe("Configured");
+    expect(loopRunning.textContent).toBe("Running");
+    expect(timeoutRetry.textContent).toContain("ms");
+    expect(statusNote.textContent?.length || 0).toBeGreaterThan(0);
+    expect(apiServer.requests.some((item) => item.pathname === "/health")).toBe(true);
+  });
+
+  test("opens alert webhook config modal from topbar button", async () => {
+    const openButton = document.getElementById("webhook-config-button") as HTMLButtonElement;
+    const closeButton = document.getElementById("webhook-config-modal-close") as HTMLButtonElement;
+    const modal = document.getElementById("webhook-config-modal") as HTMLDialogElement;
+
+    expect(modal.open).toBe(false);
+    openButton.click();
+    await waitForCondition(() => modal.open, {
+      timeoutMs: 5000,
+      message: "Expected alert webhook config modal to open.",
+    });
+
+    closeButton.click();
+    await waitForCondition(() => !modal.open, {
+      timeoutMs: 5000,
+      message: "Expected alert webhook config modal to close.",
+    });
+  });
+
+  test("shows alert config as unavailable when OpenAPI has no alert config paths", async () => {
+    await waitForCondition(
+      () => (document.getElementById("webhook-crud-note")?.textContent || "").length > 0,
+      { timeoutMs: 10_000, message: "Expected alert config note to render." },
+    );
+
+    const note = document.getElementById("webhook-crud-note") as HTMLElement;
+    const createButton = document.getElementById("webhook-crud-create-button") as HTMLButtonElement;
+    const updateButton = document.getElementById("webhook-crud-update-button") as HTMLButtonElement;
+    const deleteButton = document.getElementById("webhook-crud-delete-button") as HTMLButtonElement;
+
+    expect(note.textContent?.toLowerCase() || "").toContain("not detected");
+    expect(createButton.disabled).toBe(true);
+    expect(updateButton.disabled).toBe(true);
+    expect(deleteButton.disabled).toBe(true);
+    expect(apiServer.requests.some((item) => item.pathname === "/openapi.json")).toBe(true);
+  });
+
+  test("discovers alert config endpoints and supports save/test/clear", async () => {
+    apiServer.setWebhookCrudEnabled(true);
+    const refreshEndpoints = document.getElementById(
+      "webhook-crud-refresh-button",
+    ) as HTMLButtonElement;
+    const saveButton = document.getElementById("webhook-crud-create-button") as HTMLButtonElement;
+    const testButton = document.getElementById("webhook-crud-update-button") as HTMLButtonElement;
+    const clearUrlButton = document.getElementById("webhook-crud-delete-button") as HTMLButtonElement;
+    const urlInput = document.getElementById("webhook-crud-url") as HTMLInputElement;
+    const enabledInput = document.getElementById("webhook-crud-enabled") as HTMLInputElement;
+    const intervalInput = document.getElementById("webhook-crud-interval-ms") as HTMLInputElement;
+
+    refreshEndpoints.click();
+    await waitForCondition(
+      () => (document.getElementById("webhook-crud-note")?.textContent || "").includes("/api/alerts/config"),
+      { timeoutMs: 10_000, message: "Expected alert config endpoints to be discovered." },
+    );
+    expect(saveButton.disabled).toBe(false);
+
+    urlInput.value = "https://hooks.example.test/alerts/pagerduty-v2";
+    urlInput.dispatchEvent(new Event("input", { bubbles: true }));
+    enabledInput.checked = true;
+    enabledInput.dispatchEvent(new Event("change", { bubbles: true }));
+    intervalInput.value = "45000";
+    intervalInput.dispatchEvent(new Event("input", { bubbles: true }));
+    saveButton.click();
+
+    await waitForCondition(() => getStatusText().includes("Saved alert webhook policy."), {
+      timeoutMs: 10_000,
+      message: "Expected save status.",
+    });
+    expect(urlInput.value).toContain("pagerduty-v2");
+    expect(intervalInput.value).toBe("45000");
+
+    testButton.click();
+    await waitForCondition(() => getStatusText().includes("Sent webhook test event"), {
+      timeoutMs: 10_000,
+      message: "Expected test webhook status.",
+    });
+
+    clearUrlButton.click();
+    await waitForCondition(() => getStatusText().includes("Cleared alert webhook URL."), {
+      timeoutMs: 10_000,
+      message: "Expected clear URL status.",
+    });
+    expect(urlInput.value).toBe("");
+    expect(enabledInput.checked).toBe(false);
+
+    expect(apiServer.requests.some((item) => item.pathname === "/api/alerts/config")).toBe(true);
+    expect(apiServer.requests.some((item) => item.pathname === "/api/alerts/test-webhook")).toBe(true);
+  });
+
   test("serializes custom date/time into server query and URL", async () => {
     await resetToBaseline();
 
@@ -161,6 +270,33 @@ describe.sequential("MikroScope Console Integration", () => {
     expect(copied).toContain(window.location.pathname);
     expect(copied).toContain("field=");
     expect(copied).toContain("value=");
+  });
+
+  test("resets to baseline query with X shortcut", async () => {
+    await resetToBaseline();
+
+    const level = document.getElementById("query-level") as HTMLSelectElement;
+    const audit = document.getElementById("query-audit") as HTMLSelectElement;
+    const limit = document.getElementById("query-limit") as HTMLInputElement;
+    const timelineTab = document.querySelector('.view-tab[data-view-target="timeline"]');
+    const streamTab = document.querySelector('.view-tab[data-view-target="stream"]');
+
+    level.value = "ERROR";
+    level.dispatchEvent(new Event("change", { bubbles: true }));
+    audit.value = "true";
+    audit.dispatchEvent(new Event("change", { bubbles: true }));
+    limit.value = "321";
+    limit.dispatchEvent(new Event("change", { bubbles: true }));
+    (timelineTab as HTMLButtonElement)?.click();
+
+    dispatchShortcut("x");
+    await waitForLoadedStatus();
+    await waitForApiQuiet();
+
+    expect(level.value).toBe("");
+    expect(audit.value).toBe("");
+    expect(limit.value).toBe("1000");
+    expect((streamTab as HTMLButtonElement)?.classList.contains("is-active")).toBe(true);
   });
 
   test("timeline drilldown returns to stream and shows timeline scope chip", async () => {
@@ -383,6 +519,7 @@ describe.sequential("MikroScope Console Integration", () => {
     const queryDetails = document.querySelector(".query-details") as HTMLDetailsElement;
     const inspectDetails = document.querySelector(".inspect-panel") as HTMLDetailsElement;
     const insightsDetails = document.querySelector(".insights-details") as HTMLDetailsElement;
+    const webhookConfigModal = document.getElementById("webhook-config-modal") as HTMLDialogElement;
     const shortcutsModal = document.getElementById("shortcuts-modal") as HTMLDialogElement;
 
     const initialQueryOpen = queryDetails.open;
@@ -403,6 +540,11 @@ describe.sequential("MikroScope Console Integration", () => {
     expect(insightsDetails.open).toBe(!initialInsightsOpen);
     dispatchShortcut("n");
     expect(insightsDetails.open).toBe(initialInsightsOpen);
+
+    dispatchShortcut("w");
+    expect(webhookConfigModal.open).toBe(true);
+    dispatchShortcut("w");
+    expect(webhookConfigModal.open).toBe(false);
 
     dispatchShortcut("?");
     expect(shortcutsModal.open).toBe(true);

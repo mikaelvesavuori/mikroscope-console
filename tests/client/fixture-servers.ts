@@ -25,6 +25,24 @@ type StartedServer = {
 
 type FixtureApiServer = StartedServer & {
   requests: URL[];
+  setWebhookCrudEnabled: (enabled: boolean) => void;
+};
+
+type AlertPolicy = {
+  cooldownMs: number;
+  webhookUrl: string;
+  enabled: boolean;
+  errorThreshold: number;
+  intervalMs: number;
+  noLogsThresholdMinutes: number;
+  webhookBackoffMs: number;
+  webhookRetryAttempts: number;
+  webhookTimeoutMs: number;
+  windowMinutes: number;
+};
+
+type FixtureApiOptions = {
+  enableWebhookCrud?: boolean;
 };
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -163,17 +181,202 @@ function aggregateBuckets(
     .slice(0, limit);
 }
 
+function buildHealthPayload() {
+  const nowIso = new Date().toISOString();
+  return {
+    ok: true,
+    service: "mikroscope",
+    uptimeSec: 1234,
+    ingest: {
+      running: true,
+      runs: 1,
+      indexed: 0,
+      lastDurationMs: 1,
+      lastRunAt: nowIso,
+      lastSuccessAt: nowIso,
+    },
+    auth: {
+      apiTokenEnabled: false,
+      basicEnabled: false,
+    },
+    ingestPolicy: {
+      intervalMs: 2000,
+      disableAutoIngest: false,
+      maxBodyBytes: 1_048_576,
+    },
+    ingestEndpoint: {
+      enabled: true,
+      maxBodyBytes: 1_048_576,
+      producerCount: 1,
+      queue: {
+        enabled: false,
+        flushMs: 25,
+        draining: false,
+        pendingBatches: 0,
+        pendingRecords: 0,
+        recordsFlushed: 0,
+        recordsQueued: 0,
+      },
+    },
+    alerting: {
+      running: true,
+      runs: 42,
+      sent: 5,
+      suppressed: 2,
+      lastRunAt: nowIso,
+      lastSuccessAt: nowIso,
+      lastDurationMs: 12,
+      lastError: "",
+      lastTriggerAtByRule: {},
+    },
+    alertPolicy: {
+      enabled: true,
+      webhookUrl: "[configured]",
+      intervalMs: 30_000,
+      windowMinutes: 5,
+      errorThreshold: 20,
+      noLogsThresholdMinutes: 0,
+      cooldownMs: 300_000,
+      webhookTimeoutMs: 5000,
+      webhookRetryAttempts: 3,
+      webhookBackoffMs: 250,
+    },
+    maintenance: {
+      running: true,
+      runs: 1,
+      deletedDbRows: 0,
+      deletedLogFiles: 0,
+      backupFailures: 0,
+      lowDiskSkips: 0,
+      lastRunAt: nowIso,
+      lastSuccessAt: nowIso,
+      lastDurationMs: 5,
+    },
+    retentionDays: {
+      db: 30,
+      dbAudit: 365,
+      logs: 30,
+      logsAudit: 365,
+    },
+    backup: {
+      auditDirectory: "",
+    },
+    storage: {
+      dbPath: "/tmp/mikroscope.db",
+      logsPath: "/tmp/logs",
+      dbBytes: 1000,
+      logsBytes: 2000,
+      freeBytes: 10_000_000,
+      minFreeBytes: 1_000_000,
+    },
+  };
+}
+
+function buildOpenApiDocument(options: FixtureApiOptions = {}) {
+  const includeWebhookCrud = Boolean(options.enableWebhookCrud);
+  const paths: Record<string, Record<string, unknown>> = {
+    "/health": {
+      get: {
+        operationId: "health",
+      },
+    },
+    "/api/logs": {
+      get: {
+        operationId: "queryLogs",
+      },
+    },
+    "/api/logs/aggregate": {
+      get: {
+        operationId: "aggregateLogs",
+      },
+    },
+  };
+
+  if (includeWebhookCrud) {
+    paths["/api/alerts/config"] = {
+      get: {
+        operationId: "getAlertConfig",
+        summary: "Read active alert webhook policy",
+        tags: ["Alerts"],
+      },
+      put: {
+        operationId: "updateAlertConfig",
+        summary: "Update alert webhook policy",
+        tags: ["Alerts"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean" },
+                  webhookUrl: { type: "string", format: "uri" },
+                  intervalMs: { type: "number" },
+                  windowMinutes: { type: "number" },
+                  errorThreshold: { type: "number" },
+                  noLogsThresholdMinutes: { type: "number" },
+                  cooldownMs: { type: "number" },
+                  webhookTimeoutMs: { type: "number" },
+                  webhookRetryAttempts: { type: "integer" },
+                  webhookBackoffMs: { type: "number" },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    paths["/api/alerts/test-webhook"] = {
+      post: {
+        operationId: "testAlertWebhook",
+        summary: "Send a manual webhook test event",
+        tags: ["Alerts"],
+      },
+    };
+  }
+
+  return {
+    openapi: "3.1.0",
+    info: {
+      title: "Fixture MikroScope API",
+      version: "0.0.0-test",
+    },
+    paths,
+  };
+}
+
 function jsonResponse(res: ServerResponse, statusCode: number, payload: unknown) {
   res.statusCode = statusCode;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("access-control-allow-origin", "*");
-  res.setHeader("access-control-allow-methods", "GET,OPTIONS");
+  res.setHeader("access-control-allow-methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   res.setHeader("access-control-allow-headers", "content-type");
   res.end(JSON.stringify(payload));
 }
 
+function methodNotAllowed(res: ServerResponse) {
+  jsonResponse(res, 405, { error: "Method not allowed" });
+}
+
 function notFound(res: ServerResponse) {
   jsonResponse(res, 404, { error: "Not found" });
+}
+
+async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  if (chunks.length === 0) {
+    return {};
+  }
+  const text = Buffer.concat(chunks).toString("utf8").trim();
+  if (!text) return {};
+  const parsed = JSON.parse(text);
+  if (!parsed || typeof parsed !== "object") return {};
+  return parsed as Record<string, unknown>;
 }
 
 async function startServer(
@@ -223,17 +426,28 @@ export async function loadFixture(
 export async function startFixtureApiServer(
   fixture: FixturePayload,
   port = 0,
+  options: FixtureApiOptions = {},
 ): Promise<FixtureApiServer> {
   const requests: URL[] = [];
   const entries = fixture.entries;
+  let webhookCrudEnabled = Boolean(options.enableWebhookCrud);
+  const alertConfigPath = "/tmp/mikroscope.alert-policy.json";
+  let alertPolicy: AlertPolicy = {
+    cooldownMs: 300_000,
+    enabled: true,
+    errorThreshold: 20,
+    intervalMs: 30_000,
+    noLogsThresholdMinutes: 0,
+    webhookBackoffMs: 250,
+    webhookRetryAttempts: 3,
+    webhookTimeoutMs: 5000,
+    webhookUrl: "https://hooks.example.test/alerts/primary",
+    windowMinutes: 5,
+  };
 
   const started = await startServer((req, res) => {
     if (req.method === "OPTIONS") {
       jsonResponse(res, 204, {});
-      return;
-    }
-    if (req.method !== "GET") {
-      jsonResponse(res, 405, { error: "Method not allowed" });
       return;
     }
 
@@ -241,6 +455,10 @@ export async function startFixtureApiServer(
     requests.push(url);
 
     if (url.pathname === "/api/logs") {
+      if (req.method !== "GET") {
+        methodNotAllowed(res);
+        return;
+      }
       const filtered = applyFilters(entries, url.searchParams);
       const limit = clamp(toInt(url.searchParams.get("limit"), 1000), 1, 1000);
       const offset = parseCursor(url.searchParams.get("cursor"));
@@ -257,12 +475,170 @@ export async function startFixtureApiServer(
     }
 
     if (url.pathname === "/api/logs/aggregate") {
+      if (req.method !== "GET") {
+        methodNotAllowed(res);
+        return;
+      }
       const filtered = applyFilters(entries, url.searchParams);
       const groupBy = toText(url.searchParams.get("groupBy")).trim();
       const groupField = toText(url.searchParams.get("groupField")).trim();
       const limit = clamp(toInt(url.searchParams.get("limit"), 10), 1, 200);
       const buckets = aggregateBuckets(filtered, groupBy, groupField, limit);
       jsonResponse(res, 200, { buckets, groupBy });
+      return;
+    }
+
+    if (url.pathname === "/health") {
+      if (req.method !== "GET") {
+        methodNotAllowed(res);
+        return;
+      }
+      jsonResponse(res, 200, buildHealthPayload());
+      return;
+    }
+
+    if (webhookCrudEnabled && url.pathname === "/api/alerts/config") {
+      if (req.method === "GET") {
+        jsonResponse(res, 200, { configPath: alertConfigPath, policy: alertPolicy });
+        return;
+      }
+      if (req.method === "PUT") {
+        return Promise.resolve(readJsonBody(req)).then((body) => {
+          const allowedKeys = new Set([
+            "enabled",
+            "webhookUrl",
+            "intervalMs",
+            "windowMinutes",
+            "errorThreshold",
+            "noLogsThresholdMinutes",
+            "cooldownMs",
+            "webhookTimeoutMs",
+            "webhookRetryAttempts",
+            "webhookBackoffMs",
+          ]);
+          for (const key of Object.keys(body)) {
+            if (!allowedKeys.has(key)) {
+              jsonResponse(res, 400, { error: `Unsupported field "${key}".` });
+              return;
+            }
+          }
+
+          const next: AlertPolicy = { ...alertPolicy };
+          if (Object.hasOwn(body, "enabled")) {
+            if (typeof body.enabled !== "boolean") {
+              jsonResponse(res, 400, { error: "enabled must be a boolean." });
+              return;
+            }
+            next.enabled = body.enabled;
+          }
+          if (Object.hasOwn(body, "webhookUrl")) {
+            if (body.webhookUrl === null) {
+              next.webhookUrl = "";
+            } else if (typeof body.webhookUrl === "string") {
+              next.webhookUrl = body.webhookUrl.trim();
+            } else {
+              jsonResponse(res, 400, { error: "webhookUrl must be a string or null." });
+              return;
+            }
+          }
+
+          const numberSpecs: Array<{
+            integer?: boolean;
+            key: keyof AlertPolicy;
+            min: number;
+          }> = [
+            { key: "intervalMs", min: 1000 },
+            { key: "windowMinutes", min: 1 },
+            { key: "errorThreshold", min: 1 },
+            { key: "noLogsThresholdMinutes", min: 0 },
+            { key: "cooldownMs", min: 1000 },
+            { key: "webhookTimeoutMs", min: 250 },
+            { integer: true, key: "webhookRetryAttempts", min: 1 },
+            { key: "webhookBackoffMs", min: 25 },
+          ];
+          for (const spec of numberSpecs) {
+            if (!Object.hasOwn(body, spec.key)) continue;
+            const value = body[spec.key];
+            if (typeof value !== "number" || !Number.isFinite(value)) {
+              jsonResponse(res, 400, { error: `${spec.key} must be a number.` });
+              return;
+            }
+            if (spec.integer && !Number.isInteger(value)) {
+              jsonResponse(res, 400, { error: `${spec.key} must be an integer.` });
+              return;
+            }
+            if (value < spec.min) {
+              jsonResponse(res, 400, { error: `${spec.key} must be at least ${spec.min}.` });
+              return;
+            }
+            next[spec.key] = value;
+          }
+
+          if (next.enabled && !next.webhookUrl) {
+            jsonResponse(res, 400, {
+              error: "webhookUrl must be configured when alerting is enabled.",
+            });
+            return;
+          }
+
+          alertPolicy = next;
+          jsonResponse(res, 200, { configPath: alertConfigPath, policy: alertPolicy });
+        });
+      }
+      methodNotAllowed(res);
+      return;
+    }
+
+    if (webhookCrudEnabled && url.pathname === "/api/alerts/test-webhook") {
+      if (req.method !== "POST") {
+        methodNotAllowed(res);
+        return;
+      }
+      return Promise.resolve(readJsonBody(req)).then((body) => {
+        if (!body || typeof body !== "object" || Array.isArray(body)) {
+          jsonResponse(res, 400, { error: "Test webhook payload must be a JSON object." });
+          return;
+        }
+        for (const key of Object.keys(body)) {
+          if (key !== "webhookUrl") {
+            jsonResponse(res, 400, {
+              error: `Test webhook payload includes unsupported field "${key}".`,
+            });
+            return;
+          }
+        }
+
+        let targetUrl = alertPolicy.webhookUrl;
+        if (Object.hasOwn(body, "webhookUrl")) {
+          if (body.webhookUrl === null) {
+            targetUrl = "";
+          } else if (typeof body.webhookUrl === "string") {
+            targetUrl = body.webhookUrl.trim();
+          } else {
+            jsonResponse(res, 400, { error: "webhookUrl must be a string or null." });
+            return;
+          }
+        }
+
+        if (!targetUrl) {
+          jsonResponse(res, 400, { error: "No webhook URL is configured." });
+          return;
+        }
+
+        jsonResponse(res, 200, {
+          ok: true,
+          sentAt: new Date().toISOString(),
+          targetUrl,
+        });
+      });
+    }
+
+    if (url.pathname === "/openapi.json") {
+      if (req.method !== "GET") {
+        methodNotAllowed(res);
+        return;
+      }
+      jsonResponse(res, 200, buildOpenApiDocument({ enableWebhookCrud: webhookCrudEnabled }));
       return;
     }
 
@@ -273,6 +649,9 @@ export async function startFixtureApiServer(
     origin: started.origin,
     close: started.close,
     requests,
+    setWebhookCrudEnabled: (enabled) => {
+      webhookCrudEnabled = Boolean(enabled);
+    },
   };
 }
 

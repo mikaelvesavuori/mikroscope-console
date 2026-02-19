@@ -8,6 +8,8 @@
     detailEntriesById: new Map(),
     expanded: new Set(),
     hasMoreLogs: false,
+    healthAbortController: null,
+    healthRequestId: 0,
     insightsAbortController: null,
     insightsRequestId: 0,
     isRestoringScope: false,
@@ -26,6 +28,24 @@
       levelDistribution: [],
       topComponents: [],
       topEvents: [],
+    },
+    webhookHealth: {
+      alerting: null,
+      alertPolicy: null,
+      error: "",
+      loadedAt: 0,
+      loading: false,
+    },
+    webhookCrud: {
+      available: false,
+      endpoints: {
+        configGet: null,
+        configPut: null,
+        test: null,
+      },
+      error: "",
+      loading: false,
+      policy: null,
     },
     visibleLogs: [],
   };
@@ -74,6 +94,9 @@
     commandPaletteInput: document.getElementById("command-palette-input"),
     commandPaletteList: document.getElementById("command-palette-list"),
     commandPaletteModal: document.getElementById("command-palette-modal"),
+    webhookConfigButton: document.getElementById("webhook-config-button"),
+    webhookConfigModal: document.getElementById("webhook-config-modal"),
+    webhookConfigModalClose: document.getElementById("webhook-config-modal-close"),
     shortcutsHelpButton: document.getElementById("shortcuts-help-button"),
     shortcutsModal: document.getElementById("shortcuts-modal"),
     shortcutsModalClose: document.getElementById("shortcuts-modal-close"),
@@ -103,6 +126,33 @@
     themeToggle: document.getElementById("theme-toggle"),
     topComponents: document.getElementById("top-components"),
     topEvents: document.getElementById("top-events"),
+    webhookAlertEnabled: document.getElementById("webhook-alert-enabled"),
+    webhookConfigured: document.getElementById("webhook-configured"),
+    webhookLoopRunning: document.getElementById("webhook-loop-running"),
+    webhookSentSuppressed: document.getElementById("webhook-sent-suppressed"),
+    webhookTimeoutRetry: document.getElementById("webhook-timeout-retry"),
+    webhookLastSuccess: document.getElementById("webhook-last-success"),
+    webhookStatusNote: document.getElementById("webhook-status-note"),
+    webhookRefreshButton: document.getElementById("webhook-refresh-button"),
+    webhookCrudNote: document.getElementById("webhook-crud-note"),
+    webhookCrudForm: document.getElementById("webhook-crud-form"),
+    webhookCrudUrl: document.getElementById("webhook-crud-url"),
+    webhookCrudEnabled: document.getElementById("webhook-crud-enabled"),
+    webhookCrudIntervalMs: document.getElementById("webhook-crud-interval-ms"),
+    webhookCrudWindowMinutes: document.getElementById("webhook-crud-window-minutes"),
+    webhookCrudErrorThreshold: document.getElementById("webhook-crud-error-threshold"),
+    webhookCrudNoLogsThresholdMinutes: document.getElementById(
+      "webhook-crud-no-logs-threshold-minutes",
+    ),
+    webhookCrudCooldownMs: document.getElementById("webhook-crud-cooldown-ms"),
+    webhookCrudTimeoutMs: document.getElementById("webhook-crud-timeout-ms"),
+    webhookCrudRetryAttempts: document.getElementById("webhook-crud-retry-attempts"),
+    webhookCrudBackoffMs: document.getElementById("webhook-crud-backoff-ms"),
+    webhookCrudRefreshButton: document.getElementById("webhook-crud-refresh-button"),
+    webhookCrudCreateButton: document.getElementById("webhook-crud-create-button"),
+    webhookCrudUpdateButton: document.getElementById("webhook-crud-update-button"),
+    webhookCrudDeleteButton: document.getElementById("webhook-crud-delete-button"),
+    webhookCrudClearButton: document.getElementById("webhook-crud-clear-button"),
     viewPanes: Array.from(document.querySelectorAll(".view-pane")),
     viewTabs: Array.from(document.querySelectorAll(".view-tab")),
   };
@@ -127,6 +177,18 @@
     "data.customerId",
     "data.component",
   ];
+  const DEFAULT_ALERT_POLICY = Object.freeze({
+    cooldownMs: 300000,
+    enabled: false,
+    errorThreshold: 20,
+    intervalMs: 30000,
+    noLogsThresholdMinutes: 0,
+    webhookBackoffMs: 250,
+    webhookRetryAttempts: 3,
+    webhookTimeoutMs: 5000,
+    webhookUrl: "",
+    windowMinutes: 5,
+  });
   const themeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
   function setStatus(message) {
@@ -335,6 +397,15 @@
     elements.shortcutsModal.showModal();
   }
 
+  function toggleWebhookConfigModal() {
+    if (!elements.webhookConfigModal) return;
+    if (elements.webhookConfigModal.open) {
+      elements.webhookConfigModal.close();
+      return;
+    }
+    elements.webhookConfigModal.showModal();
+  }
+
   function normalizeCommandPaletteText(value) {
     return safeText(value).trim().toLowerCase();
   }
@@ -353,6 +424,9 @@
     const shortcutsAction = elements.shortcutsModal?.open
       ? "Hide keyboard shortcuts"
       : "Show keyboard shortcuts";
+    const webhookConfigAction = elements.webhookConfigModal?.open
+      ? "Hide alert webhook config"
+      : "Show alert webhook config";
     const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
 
     return [
@@ -369,6 +443,7 @@
         label: "Reset to baseline query",
         detail: "Reset scope, filters, and view to default 30d stream",
         keywords: "reset baseline defaults clear all",
+        shortcut: "X",
         run: () => resetToBaselineQuery(),
       },
       {
@@ -378,6 +453,32 @@
         keywords: "url path share link",
         shortcut: "U",
         run: () => copyCurrentViewPath(),
+      },
+      {
+        id: "refresh-webhook-health",
+        label: "Refresh alert webhook status",
+        detail: "Fetch /health alerting policy and runtime state",
+        keywords: "health webhook alert policy status",
+        run: () => {
+          void refreshWebhookHealth({ notify: true });
+        },
+      },
+      {
+        id: "refresh-webhook-crud",
+        label: "Reload alert webhook config",
+        detail: "Re-check /openapi.json and load /api/alerts/config",
+        keywords: "webhook alerts config openapi",
+        run: () => {
+          void refreshWebhookCrudCapabilities({ notify: true });
+        },
+      },
+      {
+        id: "open-webhook-config",
+        label: webhookConfigAction,
+        detail: "Open modal for alert webhook policy and test webhook",
+        keywords: "webhook alert config modal",
+        shortcut: "W",
+        run: () => toggleWebhookConfigModal(),
       },
       {
         id: "view-stream",
@@ -572,6 +673,9 @@
     if (elements.shortcutsModal?.open) {
       elements.shortcutsModal.close();
     }
+    if (elements.webhookConfigModal?.open) {
+      elements.webhookConfigModal.close();
+    }
     state.commandPaletteQuery = "";
     state.commandPaletteActiveIndex = 0;
     if (elements.commandPaletteInput) {
@@ -662,6 +766,11 @@
       toggleDetailsPanel(elements.insightsDetails);
       return;
     }
+    if (key === "w") {
+      event.preventDefault();
+      toggleWebhookConfigModal();
+      return;
+    }
     if (key === "s") {
       event.preventDefault();
       setActiveView("stream");
@@ -680,6 +789,11 @@
     if (key === "u") {
       event.preventDefault();
       copyCurrentViewPath(elements.copyViewUrlButton || undefined);
+      return;
+    }
+    if (key === "x") {
+      event.preventDefault();
+      resetToBaselineQuery();
       return;
     }
     if (key === "enter") {
@@ -1863,6 +1977,565 @@
     }
   }
 
+  function setWebhookPill(target, value, labels = { off: "Disabled", on: "Enabled" }) {
+    if (!(target instanceof HTMLElement)) return;
+    target.classList.remove("is-on", "is-off", "is-neutral");
+    if (value === true) {
+      target.classList.add("is-on");
+      target.textContent = labels.on;
+      return;
+    }
+    if (value === false) {
+      target.classList.add("is-off");
+      target.textContent = labels.off;
+      return;
+    }
+    target.classList.add("is-neutral");
+    target.textContent = "Unknown";
+  }
+
+  function setWebhookText(target, text) {
+    if (!(target instanceof HTMLElement)) return;
+    target.textContent = text;
+  }
+
+  function formatDateTimeLabel(value) {
+    const parsed = Date.parse(safeText(value).trim());
+    if (!Number.isFinite(parsed)) return "-";
+    return new Date(parsed).toLocaleString();
+  }
+
+  function formatMsLabel(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric < 0) return "-";
+    return `${Math.round(numeric)}ms`;
+  }
+
+  function formatCountLabel(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric < 0) return "-";
+    return String(Math.round(numeric));
+  }
+
+  function hasConfiguredWebhook(policy) {
+    const webhook = safeText(policy?.webhookUrl).trim();
+    return webhook.length > 0;
+  }
+
+  function renderWebhookHealth() {
+    const policy = state.webhookHealth.alertPolicy;
+    const alerting = state.webhookHealth.alerting;
+    const webhookConfigured = hasConfiguredWebhook(policy);
+    const hasPolicy = Boolean(policy && typeof policy === "object");
+    const hasAlerting = Boolean(alerting && typeof alerting === "object");
+
+    setWebhookPill(elements.webhookAlertEnabled, hasPolicy ? Boolean(policy.enabled) : null, {
+      off: "Disabled",
+      on: "Enabled",
+    });
+    setWebhookPill(elements.webhookConfigured, hasPolicy ? webhookConfigured : null, {
+      off: "Not set",
+      on: "Configured",
+    });
+    setWebhookPill(elements.webhookLoopRunning, hasAlerting ? Boolean(alerting.running) : null, {
+      off: "Stopped",
+      on: "Running",
+    });
+
+    const sent = formatCountLabel(alerting?.sent);
+    const suppressed = formatCountLabel(alerting?.suppressed);
+    setWebhookText(elements.webhookSentSuppressed, `${sent} / ${suppressed}`);
+
+    const timeout = formatMsLabel(policy?.webhookTimeoutMs);
+    const retries = formatCountLabel(policy?.webhookRetryAttempts);
+    setWebhookText(elements.webhookTimeoutRetry, `${timeout} / ${retries}`);
+    setWebhookText(elements.webhookLastSuccess, formatDateTimeLabel(alerting?.lastSuccessAt));
+
+    if (state.webhookHealth.loading && !state.webhookHealth.loadedAt) {
+      setWebhookText(elements.webhookStatusNote, "Loading alert webhook status...");
+      return;
+    }
+    if (state.webhookHealth.error) {
+      setWebhookText(elements.webhookStatusNote, `Health unavailable: ${state.webhookHealth.error}`);
+      return;
+    }
+    if (state.webhookHealth.loadedAt) {
+      const loadedLabel = new Date(state.webhookHealth.loadedAt).toLocaleTimeString();
+      const lastError = safeText(alerting?.lastError).trim();
+      if (lastError) {
+        setWebhookText(
+          elements.webhookStatusNote,
+          `Updated ${loadedLabel}. Last alerting error: ${lastError}`,
+        );
+        return;
+      }
+      setWebhookText(elements.webhookStatusNote, `Updated ${loadedLabel}.`);
+      return;
+    }
+    setWebhookText(elements.webhookStatusNote, "Health status not loaded yet.");
+  }
+
+  function toFiniteNumber(value, fallback) {
+    const parsed = Number(safeText(value).trim());
+    if (!Number.isFinite(parsed)) return fallback;
+    return parsed;
+  }
+
+  function toFiniteInteger(value, fallback) {
+    const parsed = Number(safeText(value).trim());
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) return fallback;
+    return parsed;
+  }
+
+  function normalizeOpenApiOperation(path, method, operation) {
+    return {
+      method: safeText(method).toUpperCase(),
+      operationId: safeText(operation?.operationId).trim(),
+      path: safeText(path),
+    };
+  }
+
+  function findOpenApiOperation(paths, predicate) {
+    for (const [path, pathItem] of Object.entries(paths)) {
+      if (!pathItem || typeof pathItem !== "object") continue;
+      for (const method of ["get", "post", "put", "patch", "delete"]) {
+        const operation = pathItem[method];
+        if (!operation || typeof operation !== "object") continue;
+        const normalized = normalizeOpenApiOperation(path, method, operation);
+        if (predicate(normalized, operation, pathItem)) {
+          return normalized;
+        }
+      }
+    }
+    return null;
+  }
+
+  function parseWebhookCrudEndpoints(spec) {
+    const paths = spec?.paths;
+    if (!paths || typeof paths !== "object") return null;
+
+    const configGet =
+      (paths["/api/alerts/config"]?.get
+        ? normalizeOpenApiOperation("/api/alerts/config", "get", paths["/api/alerts/config"]?.get)
+        : null) ||
+      findOpenApiOperation(
+        paths,
+        (candidate, operation) =>
+          candidate.method === "GET" &&
+          (candidate.operationId === "getAlertConfig" ||
+            safeText(operation.summary).toLowerCase().includes("alert webhook policy")),
+      );
+
+    const configPut =
+      (paths["/api/alerts/config"]?.put
+        ? normalizeOpenApiOperation("/api/alerts/config", "put", paths["/api/alerts/config"]?.put)
+        : null) ||
+      findOpenApiOperation(
+        paths,
+        (candidate, operation) =>
+          candidate.method === "PUT" &&
+          (candidate.operationId === "updateAlertConfig" ||
+            safeText(operation.summary).toLowerCase().includes("alert webhook policy")),
+      );
+
+    const test =
+      (paths["/api/alerts/test-webhook"]?.post
+        ? normalizeOpenApiOperation(
+            "/api/alerts/test-webhook",
+            "post",
+            paths["/api/alerts/test-webhook"]?.post,
+          )
+        : null) ||
+      findOpenApiOperation(
+        paths,
+        (candidate, operation) =>
+          candidate.method === "POST" &&
+          (candidate.operationId === "testAlertWebhook" ||
+            safeText(operation.summary).toLowerCase().includes("manual webhook test")),
+      );
+
+    if (!configGet && !configPut) return null;
+    return { configGet, configPut, test };
+  }
+
+  async function fetchOpenApiDocument(signal) {
+    const response = await fetch(toApiUrl("/openapi.json"), {
+      cache: "no-store",
+      signal,
+    });
+    if (!response.ok) {
+      throw new Error(`/openapi.json returned ${response.status}`);
+    }
+    return response.json();
+  }
+
+  function normalizeAlertPolicy(input) {
+    const source = input && typeof input === "object" ? input : {};
+    return {
+      cooldownMs: Math.max(1000, toFiniteNumber(source.cooldownMs, DEFAULT_ALERT_POLICY.cooldownMs)),
+      enabled: Boolean(source.enabled),
+      errorThreshold: Math.max(1, toFiniteNumber(source.errorThreshold, DEFAULT_ALERT_POLICY.errorThreshold)),
+      intervalMs: Math.max(1000, toFiniteNumber(source.intervalMs, DEFAULT_ALERT_POLICY.intervalMs)),
+      noLogsThresholdMinutes: Math.max(
+        0,
+        toFiniteNumber(source.noLogsThresholdMinutes, DEFAULT_ALERT_POLICY.noLogsThresholdMinutes),
+      ),
+      webhookBackoffMs: Math.max(
+        25,
+        toFiniteNumber(source.webhookBackoffMs, DEFAULT_ALERT_POLICY.webhookBackoffMs),
+      ),
+      webhookRetryAttempts: Math.max(
+        1,
+        toFiniteInteger(source.webhookRetryAttempts, DEFAULT_ALERT_POLICY.webhookRetryAttempts),
+      ),
+      webhookTimeoutMs: Math.max(
+        250,
+        toFiniteNumber(source.webhookTimeoutMs, DEFAULT_ALERT_POLICY.webhookTimeoutMs),
+      ),
+      webhookUrl: safeText(source.webhookUrl).trim(),
+      windowMinutes: Math.max(1, toFiniteNumber(source.windowMinutes, DEFAULT_ALERT_POLICY.windowMinutes)),
+    };
+  }
+
+  function formatPolicyNumber(value, fallback) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return String(fallback);
+    if (Number.isInteger(parsed)) return String(parsed);
+    return String(parsed);
+  }
+
+  function readNumberInput(element, label, minimum, integer = false) {
+    const raw = safeText(element?.value).trim();
+    const parsed = Number(raw);
+    if (!raw || !Number.isFinite(parsed)) {
+      throw new Error(`${label} must be a number.`);
+    }
+    if (integer && !Number.isInteger(parsed)) {
+      throw new Error(`${label} must be an integer.`);
+    }
+    if (parsed < minimum) {
+      throw new Error(`${label} must be at least ${minimum}.`);
+    }
+    return parsed;
+  }
+
+  function readWebhookCrudForm() {
+    const webhookUrl = safeText(elements.webhookCrudUrl?.value).trim();
+    const enabled = Boolean(elements.webhookCrudEnabled?.checked);
+
+    if (enabled && !webhookUrl) {
+      throw new Error("Webhook URL must be configured when alerting is enabled.");
+    }
+
+    return {
+      cooldownMs: readNumberInput(elements.webhookCrudCooldownMs, "Cooldown", 1000),
+      enabled,
+      errorThreshold: readNumberInput(elements.webhookCrudErrorThreshold, "Error threshold", 1),
+      intervalMs: readNumberInput(elements.webhookCrudIntervalMs, "Interval", 1000),
+      noLogsThresholdMinutes: readNumberInput(
+        elements.webhookCrudNoLogsThresholdMinutes,
+        "No-logs threshold",
+        0,
+      ),
+      webhookBackoffMs: readNumberInput(elements.webhookCrudBackoffMs, "Backoff", 25),
+      webhookRetryAttempts: readNumberInput(
+        elements.webhookCrudRetryAttempts,
+        "Retry attempts",
+        1,
+        true,
+      ),
+      webhookTimeoutMs: readNumberInput(elements.webhookCrudTimeoutMs, "Timeout", 250),
+      webhookUrl: webhookUrl || null,
+      windowMinutes: readNumberInput(elements.webhookCrudWindowMinutes, "Window", 1),
+    };
+  }
+
+  function applyWebhookCrudForm(policyInput) {
+    const policy = normalizeAlertPolicy(policyInput || DEFAULT_ALERT_POLICY);
+    if (elements.webhookCrudUrl) {
+      elements.webhookCrudUrl.value = policy.webhookUrl;
+    }
+    if (elements.webhookCrudEnabled) {
+      elements.webhookCrudEnabled.checked = Boolean(policy.enabled);
+    }
+    if (elements.webhookCrudIntervalMs) {
+      elements.webhookCrudIntervalMs.value = formatPolicyNumber(
+        policy.intervalMs,
+        DEFAULT_ALERT_POLICY.intervalMs,
+      );
+    }
+    if (elements.webhookCrudWindowMinutes) {
+      elements.webhookCrudWindowMinutes.value = formatPolicyNumber(
+        policy.windowMinutes,
+        DEFAULT_ALERT_POLICY.windowMinutes,
+      );
+    }
+    if (elements.webhookCrudErrorThreshold) {
+      elements.webhookCrudErrorThreshold.value = formatPolicyNumber(
+        policy.errorThreshold,
+        DEFAULT_ALERT_POLICY.errorThreshold,
+      );
+    }
+    if (elements.webhookCrudNoLogsThresholdMinutes) {
+      elements.webhookCrudNoLogsThresholdMinutes.value = formatPolicyNumber(
+        policy.noLogsThresholdMinutes,
+        DEFAULT_ALERT_POLICY.noLogsThresholdMinutes,
+      );
+    }
+    if (elements.webhookCrudCooldownMs) {
+      elements.webhookCrudCooldownMs.value = formatPolicyNumber(
+        policy.cooldownMs,
+        DEFAULT_ALERT_POLICY.cooldownMs,
+      );
+    }
+    if (elements.webhookCrudTimeoutMs) {
+      elements.webhookCrudTimeoutMs.value = formatPolicyNumber(
+        policy.webhookTimeoutMs,
+        DEFAULT_ALERT_POLICY.webhookTimeoutMs,
+      );
+    }
+    if (elements.webhookCrudRetryAttempts) {
+      elements.webhookCrudRetryAttempts.value = formatPolicyNumber(
+        policy.webhookRetryAttempts,
+        DEFAULT_ALERT_POLICY.webhookRetryAttempts,
+      );
+    }
+    if (elements.webhookCrudBackoffMs) {
+      elements.webhookCrudBackoffMs.value = formatPolicyNumber(
+        policy.webhookBackoffMs,
+        DEFAULT_ALERT_POLICY.webhookBackoffMs,
+      );
+    }
+  }
+
+  function clearWebhookCrudSelection() {
+    applyWebhookCrudForm(state.webhookCrud.policy || DEFAULT_ALERT_POLICY);
+  }
+
+  function endpointLabel(endpoint) {
+    if (!endpoint) return "n/a";
+    return `${endpoint.method} ${endpoint.path}`;
+  }
+
+  function renderWebhookCrudManager() {
+    const manager = state.webhookCrud;
+
+    if (!manager.available) {
+      const note = manager.error
+        ? `Alert config unavailable: ${manager.error}`
+        : "Alert config endpoints were not detected in /openapi.json yet.";
+      if (elements.webhookCrudNote) {
+        elements.webhookCrudNote.textContent = note;
+      }
+      if (elements.webhookCrudCreateButton) elements.webhookCrudCreateButton.disabled = true;
+      if (elements.webhookCrudUpdateButton) elements.webhookCrudUpdateButton.disabled = true;
+      if (elements.webhookCrudDeleteButton) elements.webhookCrudDeleteButton.disabled = true;
+      if (elements.webhookCrudClearButton) elements.webhookCrudClearButton.disabled = true;
+      applyWebhookCrudForm(DEFAULT_ALERT_POLICY);
+      return;
+    }
+
+    if (elements.webhookCrudNote) {
+      const descriptors = [
+        `Read: ${endpointLabel(manager.endpoints.configGet)}`,
+        `Save: ${endpointLabel(manager.endpoints.configPut)}`,
+        `Test: ${endpointLabel(manager.endpoints.test)}`,
+      ];
+      elements.webhookCrudNote.textContent = manager.loading
+        ? "Loading alert webhook config..."
+        : manager.error
+          ? `Config error: ${manager.error} | ${descriptors.join(" | ")}`
+          : descriptors.join(" | ");
+    }
+
+    const saveEnabled = Boolean(manager.endpoints.configPut) && !manager.loading;
+    const testEnabled = Boolean(manager.endpoints.test) && !manager.loading;
+    const clearEnabled = Boolean(manager.endpoints.configPut) && !manager.loading;
+    if (elements.webhookCrudCreateButton) elements.webhookCrudCreateButton.disabled = !saveEnabled;
+    if (elements.webhookCrudUpdateButton) elements.webhookCrudUpdateButton.disabled = !testEnabled;
+    if (elements.webhookCrudDeleteButton) elements.webhookCrudDeleteButton.disabled = !clearEnabled;
+    if (elements.webhookCrudClearButton) {
+      elements.webhookCrudClearButton.disabled = !manager.policy || manager.loading;
+    }
+  }
+
+  async function refreshWebhookCrudList(options = {}) {
+    const notify = Boolean(options.notify);
+    const getEndpoint = state.webhookCrud.endpoints.configGet;
+    if (!state.webhookCrud.available || !getEndpoint) {
+      renderWebhookCrudManager();
+      return;
+    }
+
+    state.webhookCrud.loading = true;
+    renderWebhookCrudManager();
+    try {
+      const response = await fetch(toApiUrl(getEndpoint.path), { cache: "no-store" });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Config load failed (${response.status})${text ? `: ${text}` : ""}`);
+      }
+      const payload = await response.json();
+      const policySource =
+        payload && typeof payload === "object" && payload.policy && typeof payload.policy === "object"
+          ? payload.policy
+          : payload;
+      state.webhookCrud.policy = normalizeAlertPolicy(policySource);
+      state.webhookCrud.error = "";
+      applyWebhookCrudForm(state.webhookCrud.policy);
+      renderWebhookCrudManager();
+      if (notify) {
+        setStatus("Loaded alert webhook config.");
+      }
+    } catch (error) {
+      state.webhookCrud.error = safeText(error).trim() || "Unknown error";
+      renderWebhookCrudManager();
+      if (notify) {
+        setStatus("Could not load alert webhook config.");
+      }
+    } finally {
+      state.webhookCrud.loading = false;
+      renderWebhookCrudManager();
+    }
+  }
+
+  async function refreshWebhookCrudCapabilities(options = {}) {
+    const notify = Boolean(options.notify);
+    state.webhookCrud.loading = true;
+    state.webhookCrud.error = "";
+    renderWebhookCrudManager();
+
+    try {
+      const controller = new AbortController();
+      const spec = await fetchOpenApiDocument(controller.signal);
+      const endpoints = parseWebhookCrudEndpoints(spec);
+      if (!endpoints || !endpoints.configGet || !endpoints.configPut) {
+        state.webhookCrud.available = false;
+        state.webhookCrud.endpoints = { configGet: null, configPut: null, test: null };
+        state.webhookCrud.policy = null;
+        state.webhookCrud.error = "Alert config paths not detected.";
+        state.webhookCrud.loading = false;
+        renderWebhookCrudManager();
+        if (notify) {
+          setStatus("Alert webhook config endpoints not detected yet.");
+        }
+        return;
+      }
+
+      state.webhookCrud.available = true;
+      state.webhookCrud.endpoints = endpoints;
+      state.webhookCrud.error = "";
+      state.webhookCrud.loading = false;
+      renderWebhookCrudManager();
+      await refreshWebhookCrudList({ notify });
+      return;
+    } catch (error) {
+      state.webhookCrud.available = false;
+      state.webhookCrud.endpoints = { configGet: null, configPut: null, test: null };
+      state.webhookCrud.policy = null;
+      state.webhookCrud.error = safeText(error).trim() || "Unknown error";
+      state.webhookCrud.loading = false;
+      renderWebhookCrudManager();
+      if (notify) {
+        setStatus("Alert webhook config discovery failed.");
+      }
+    }
+  }
+
+  async function submitWebhookCrudCreate() {
+    const endpoint = state.webhookCrud.endpoints.configPut;
+    if (!endpoint) {
+      setStatus("Save endpoint is not available.");
+      return null;
+    }
+    const payload = readWebhookCrudForm();
+    state.webhookCrud.loading = true;
+    renderWebhookCrudManager();
+    try {
+      const response = await fetch(toApiUrl(endpoint.path), {
+        body: JSON.stringify(payload),
+        headers: { "content-type": "application/json" },
+        method: endpoint.method,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Save failed (${response.status})${text ? `: ${text}` : ""}`);
+      }
+      const body = await response.json();
+      const policySource =
+        body && typeof body === "object" && body.policy && typeof body.policy === "object"
+          ? body.policy
+          : body;
+      state.webhookCrud.policy = normalizeAlertPolicy(policySource);
+      state.webhookCrud.error = "";
+      applyWebhookCrudForm(state.webhookCrud.policy);
+      return body;
+    } finally {
+      state.webhookCrud.loading = false;
+      renderWebhookCrudManager();
+    }
+  }
+
+  async function submitWebhookCrudUpdate() {
+    const endpoint = state.webhookCrud.endpoints.test;
+    if (!endpoint) {
+      setStatus("Test endpoint is not available.");
+      return null;
+    }
+    const webhookUrl = safeText(elements.webhookCrudUrl?.value).trim();
+    const payload = webhookUrl ? { webhookUrl } : {};
+    state.webhookCrud.loading = true;
+    renderWebhookCrudManager();
+    try {
+      const response = await fetch(toApiUrl(endpoint.path), {
+        body: JSON.stringify(payload),
+        headers: { "content-type": "application/json" },
+        method: endpoint.method,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Test failed (${response.status})${text ? `: ${text}` : ""}`);
+      }
+      return response.json();
+    } finally {
+      state.webhookCrud.loading = false;
+      renderWebhookCrudManager();
+    }
+  }
+
+  async function submitWebhookCrudDelete() {
+    const endpoint = state.webhookCrud.endpoints.configPut;
+    if (!endpoint) {
+      setStatus("Save endpoint is not available.");
+      return null;
+    }
+    state.webhookCrud.loading = true;
+    renderWebhookCrudManager();
+    try {
+      const response = await fetch(toApiUrl(endpoint.path), {
+        body: JSON.stringify({ enabled: false, webhookUrl: null }),
+        headers: { "content-type": "application/json" },
+        method: endpoint.method,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Clear failed (${response.status})${text ? `: ${text}` : ""}`);
+      }
+      const body = await response.json();
+      const policySource =
+        body && typeof body === "object" && body.policy && typeof body.policy === "object"
+          ? body.policy
+          : body;
+      state.webhookCrud.policy = normalizeAlertPolicy(policySource);
+      state.webhookCrud.error = "";
+      applyWebhookCrudForm(state.webhookCrud.policy);
+      return body;
+    } finally {
+      state.webhookCrud.loading = false;
+      renderWebhookCrudManager();
+    }
+  }
+
   function getLogsTimeRange(logs) {
     let minMs = Number.POSITIVE_INFINITY;
     let maxMs = Number.NEGATIVE_INFINITY;
@@ -2410,6 +3083,8 @@
     state.correlationGroups = buildCorrelationGroups(state.visibleLogs);
     renderCorrelationGroups();
     renderTraceList();
+    renderWebhookHealth();
+    renderWebhookCrudManager();
   }
 
   function render() {
@@ -2623,6 +3298,60 @@
     } finally {
       if (requestId === state.insightsRequestId) {
         state.insightsAbortController = null;
+      }
+    }
+  }
+
+  async function refreshWebhookHealth(options = {}) {
+    const notify = Boolean(options.notify);
+    const requestId = ++state.healthRequestId;
+    if (state.healthAbortController) {
+      state.healthAbortController.abort();
+    }
+    const controller = new AbortController();
+    state.healthAbortController = controller;
+    state.webhookHealth.loading = true;
+    if (!state.webhookHealth.loadedAt) {
+      renderWebhookHealth();
+    }
+
+    try {
+      const response = await fetch(toApiUrl("/health"), {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Failed (${response.status})${text ? `: ${text}` : ""}`);
+      }
+      const payload = await response.json();
+      if (requestId !== state.healthRequestId) return;
+
+      state.webhookHealth = {
+        alerting:
+          payload?.alerting && typeof payload.alerting === "object" ? payload.alerting : null,
+        alertPolicy:
+          payload?.alertPolicy && typeof payload.alertPolicy === "object" ? payload.alertPolicy : null,
+        error: "",
+        loadedAt: Date.now(),
+        loading: false,
+      };
+      renderWebhookHealth();
+      if (notify) {
+        setStatus("Refreshed alert webhook status.");
+      }
+    } catch (error) {
+      if (isAbortError(error)) return;
+      if (requestId !== state.healthRequestId) return;
+      state.webhookHealth.loading = false;
+      state.webhookHealth.error = safeText(error).trim() || "Unknown error";
+      renderWebhookHealth();
+      if (notify) {
+        setStatus("Could not refresh alert webhook status.");
+      }
+    } finally {
+      if (requestId === state.healthRequestId) {
+        state.healthAbortController = null;
       }
     }
   }
@@ -3177,6 +3906,57 @@
       resetToBaselineQuery();
     });
 
+    elements.webhookRefreshButton?.addEventListener("click", () => {
+      void refreshWebhookHealth({ notify: true });
+    });
+
+    elements.webhookCrudRefreshButton?.addEventListener("click", () => {
+      void refreshWebhookCrudCapabilities({ notify: true });
+    });
+
+    elements.webhookCrudForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+    });
+
+    elements.webhookCrudClearButton?.addEventListener("click", () => {
+      clearWebhookCrudSelection();
+      renderWebhookCrudManager();
+      setStatus("Reset alert webhook form.");
+    });
+
+    elements.webhookCrudCreateButton?.addEventListener("click", () => {
+      void submitWebhookCrudCreate()
+        .then(() => {
+          setStatus("Saved alert webhook policy.");
+        })
+        .catch((error) => {
+          setStatus(String(error));
+        });
+    });
+
+    elements.webhookCrudUpdateButton?.addEventListener("click", () => {
+      void submitWebhookCrudUpdate()
+        .then((response) => {
+          const targetUrl = safeText(response?.targetUrl).trim();
+          setStatus(
+            targetUrl ? `Sent webhook test event to ${targetUrl}.` : "Sent webhook test event.",
+          );
+        })
+        .catch((error) => {
+          setStatus(String(error));
+        });
+    });
+
+    elements.webhookCrudDeleteButton?.addEventListener("click", () => {
+      void submitWebhookCrudDelete()
+        .then(() => {
+          setStatus("Cleared alert webhook URL.");
+        })
+        .catch((error) => {
+          setStatus(String(error));
+        });
+    });
+
     elements.saveQueryButton?.addEventListener("click", () => {
       saveCurrentQuery();
     });
@@ -3522,6 +4302,10 @@
       toggleCommandPalette();
     });
 
+    elements.webhookConfigButton?.addEventListener("click", () => {
+      toggleWebhookConfigModal();
+    });
+
     elements.commandPaletteInput?.addEventListener("input", () => {
       state.commandPaletteQuery = elements.commandPaletteInput?.value || "";
       state.commandPaletteActiveIndex = 0;
@@ -3579,6 +4363,14 @@
       elements.shortcutsModal?.close();
     });
 
+    elements.webhookConfigModalClose?.addEventListener("click", () => {
+      elements.webhookConfigModal?.close();
+    });
+
+    elements.webhookConfigModal?.addEventListener("cancel", () => {
+      elements.webhookConfigModal?.close();
+    });
+
     elements.streamExpandButton.addEventListener("click", () => {
       toggleStreamModal();
     });
@@ -3626,9 +4418,13 @@
     setActiveView("stream");
     renderQueryChips();
     renderScopeContinuity();
+    renderWebhookHealth();
+    renderWebhookCrudManager();
     const config = await loadClientConfig();
     state.apiOrigin = config.apiOrigin;
     setStatus(`Ready. API: ${state.apiOrigin}`);
+    void refreshWebhookHealth();
+    void refreshWebhookCrudCapabilities();
     void fetchLogs().catch((error) => {
       setStatus(String(error));
     });

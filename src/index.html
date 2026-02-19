@@ -19,6 +19,10 @@
             aria-label="Open command palette" title="Command palette (Ctrl/Cmd+K)">
             Ctrl/Cmd+K
           </button>
+          <button id="webhook-config-button" class="button" type="button" aria-label="Open alert webhook config"
+            title="Open alert webhook config">
+            Webhooks
+          </button>
           <button id="shortcuts-help-button" class="button icon-button" type="button" aria-label="Keyboard shortcuts"
             title="Keyboard shortcuts (?)">
             ?
@@ -317,6 +321,43 @@
                       <h2>Error Correlations</h2>
                       <ol id="error-correlations" class="simple-list"></ol>
                     </div>
+                    <div class="webhook-health-card">
+                      <h2>Alert Webhook</h2>
+                      <dl class="webhook-health-grid">
+                        <div>
+                          <dt>Alerts</dt>
+                          <dd id="webhook-alert-enabled" class="webhook-status-pill is-neutral">-</dd>
+                        </div>
+                        <div>
+                          <dt>Webhook</dt>
+                          <dd id="webhook-configured" class="webhook-status-pill is-neutral">-</dd>
+                        </div>
+                        <div>
+                          <dt>Loop</dt>
+                          <dd id="webhook-loop-running" class="webhook-status-pill is-neutral">-</dd>
+                        </div>
+                        <div>
+                          <dt>Sent / Suppressed</dt>
+                          <dd id="webhook-sent-suppressed">-</dd>
+                        </div>
+                        <div>
+                          <dt>Timeout / Retry</dt>
+                          <dd id="webhook-timeout-retry">-</dd>
+                        </div>
+                        <div>
+                          <dt>Last Success</dt>
+                          <dd id="webhook-last-success">-</dd>
+                        </div>
+                      </dl>
+                      <p id="webhook-status-note" class="panel-note webhook-status-note">
+                        Loading alert webhook status...
+                      </p>
+                      <div class="inline-actions webhook-health-actions">
+                        <button id="webhook-refresh-button" type="button" class="button button-sm">
+                          Refresh
+                        </button>
+                      </div>
+                    </div>
                   </section>
                 </div>
               </div>
@@ -385,6 +426,82 @@
       </div>
     </dialog>
 
+    <dialog id="webhook-config-modal" class="webhook-config-modal" aria-label="Alert webhook config">
+      <div class="webhook-config-modal-header">
+        <strong>Alert Webhook Config</strong>
+        <button id="webhook-config-modal-close" class="button icon-button stream-modal-close-button" type="button"
+          aria-label="Close alert webhook config" title="Close alert webhook config">
+          ×
+        </button>
+      </div>
+      <div class="webhook-config-modal-body">
+        <section class="webhook-crud-section">
+          <p id="webhook-crud-note" class="panel-note">
+            Discovering alert config endpoints...
+          </p>
+          <form id="webhook-crud-form" class="webhook-crud-form">
+            <label class="webhook-crud-url-field">
+              URL
+              <input id="webhook-crud-url" type="url" placeholder="https://example.com/webhook" />
+            </label>
+            <label>
+              Interval (ms)
+              <input id="webhook-crud-interval-ms" type="number" min="1000" step="1000" />
+            </label>
+            <label>
+              Window (min)
+              <input id="webhook-crud-window-minutes" type="number" min="1" step="1" />
+            </label>
+            <label>
+              Error threshold
+              <input id="webhook-crud-error-threshold" type="number" min="1" step="1" />
+            </label>
+            <label>
+              No-logs threshold (min)
+              <input id="webhook-crud-no-logs-threshold-minutes" type="number" min="0" step="1" />
+            </label>
+            <label>
+              Cooldown (ms)
+              <input id="webhook-crud-cooldown-ms" type="number" min="1000" step="1000" />
+            </label>
+            <label>
+              Timeout (ms)
+              <input id="webhook-crud-timeout-ms" type="number" min="250" step="50" />
+            </label>
+            <label>
+              Retry attempts
+              <input id="webhook-crud-retry-attempts" type="number" min="1" step="1" />
+            </label>
+            <label>
+              Backoff (ms)
+              <input id="webhook-crud-backoff-ms" type="number" min="25" step="25" />
+            </label>
+            <label class="webhook-crud-enabled">
+              <input id="webhook-crud-enabled" type="checkbox" checked />
+              <span>Enabled</span>
+            </label>
+          </form>
+          <div class="inline-actions webhook-crud-actions">
+            <button id="webhook-crud-refresh-button" type="button" class="button button-sm">
+              Reload Config
+            </button>
+            <button id="webhook-crud-create-button" type="button" class="button button-sm">
+              Save Policy
+            </button>
+            <button id="webhook-crud-update-button" type="button" class="button button-sm">
+              Send Test
+            </button>
+            <button id="webhook-crud-delete-button" type="button" class="button button-sm">
+              Clear URL
+            </button>
+            <button id="webhook-crud-clear-button" type="button" class="button button-sm">
+              Reset Form
+            </button>
+          </div>
+        </section>
+      </div>
+    </dialog>
+
     <dialog id="shortcuts-modal" class="shortcuts-modal" aria-label="Keyboard shortcuts">
       <div class="shortcuts-modal-header">
         <strong>Keyboard Shortcuts</strong>
@@ -399,10 +516,12 @@
           <li><kbd class="shortcut-key">Q</kbd><span>Toggle query controls</span></li>
           <li><kbd class="shortcut-key">I</kbd><span>Toggle inspect panel</span></li>
           <li><kbd class="shortcut-key">N</kbd><span>Toggle insights panel</span></li>
+          <li><kbd class="shortcut-key">W</kbd><span>Toggle webhook config modal</span></li>
           <li><kbd class="shortcut-key">S</kbd><span>Open stream view</span></li>
           <li><kbd class="shortcut-key">C</kbd><span>Open correlations view</span></li>
           <li><kbd class="shortcut-key">T</kbd><span>Open timeline view</span></li>
           <li><kbd class="shortcut-key">U</kbd><span>Copy current view URL</span></li>
+          <li><kbd class="shortcut-key">X</kbd><span>Reset to baseline query</span></li>
           <li><kbd class="shortcut-key">Enter</kbd><span>Run query</span></li>
           <li><kbd class="shortcut-key">Space</kbd><span>Toggle expanded stream</span></li>
           <li><kbd class="shortcut-key">?</kbd><span>Toggle this shortcuts panel</span></li>

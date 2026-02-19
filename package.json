@@ -1,10 +1,20 @@
 {
   "name": "mikroscope-console",
-  "version": "1.0.0",
-  "description": "MikroScope Console is the optional UI for exploring MikroScope logs.",
-  "main": "index.js",
-  "keywords": [],
-  "author": "",
+  "version": "0.0.1",
+  "description": "A sharp, self-hosted console for MikroScope that turns logs into instant queries, timelines, and actionable alerts.",
+  "keywords": [
+    "mikroscope",
+    "observability",
+    "self-hosted",
+    "log-viewer",
+    "log-search",
+    "log-analysis",
+    "timeline",
+    "alerting",
+    "webhooks",
+    "correlation-id"
+  ],
+  "author": "Mikael Vesavuori",
   "license": "MIT",
   "type": "module",
   "scripts": {
