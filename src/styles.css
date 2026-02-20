@@ -16,26 +16,11 @@
 
 :root {
   --font-body:
-    "InterVariable",
-    "Inter",
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    "Helvetica Neue",
-    Arial,
-    sans-serif;
+    "InterVariable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   --font-mono:
-    ui-monospace,
-    "SFMono-Regular",
-    "SF Mono",
-    Menlo,
-    Monaco,
-    Consolas,
-    "Liberation Mono",
-    "Courier New",
-    monospace;
+    ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
   --bg-page: #f3f5f7;
   --bg-panel: #ffffff;
   --bg-muted: #f8fafc;
@@ -223,7 +208,7 @@ select {
   gap: 6px;
 }
 
-.query-command-row>label {
+.query-command-row > label {
   min-width: 0;
 }
 
@@ -430,7 +415,9 @@ select {
   font-size: 13px;
   font-weight: 700;
   line-height: 1;
-  transition: transform 0.12s ease, color 0.12s ease;
+  transition:
+    transform 0.12s ease,
+    color 0.12s ease;
   transform: rotate(-90deg);
 }
 
@@ -447,7 +434,9 @@ select {
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
-  transition: grid-template-rows 0.14s ease, opacity 0.14s ease;
+  transition:
+    grid-template-rows 0.14s ease,
+    opacity 0.14s ease;
 }
 
 .details-panel[open] .details-body {
@@ -462,14 +451,16 @@ select {
 
 .advanced-grid {
   display: grid;
-  grid-template-columns:
-    minmax(190px, 1.2fr) minmax(190px, 1.2fr) minmax(130px, 0.8fr) minmax(170px, 1fr) minmax(140px, 0.9fr) auto;
+  grid-template-columns: minmax(190px, 1.2fr) minmax(190px, 1.2fr) minmax(130px, 0.8fr) minmax(
+      170px,
+      1fr
+    ) minmax(140px, 0.9fr) auto;
   gap: 6px;
   padding: 8px;
   align-items: end;
 }
 
-.advanced-grid>label {
+.advanced-grid > label {
   min-width: 0;
 }
 
@@ -518,7 +509,9 @@ select {
   background-position:
     calc(100% - 13px) calc(50% - 2px),
     calc(100% - 8px) calc(50% - 2px);
-  background-size: 5px 5px, 5px 5px;
+  background-size:
+    5px 5px,
+    5px 5px;
   background-repeat: no-repeat;
 }
 
@@ -541,7 +534,10 @@ select:focus {
   font-size: var(--control-font-size);
   cursor: pointer;
   line-height: 1;
-  transition: border-color 0.12s ease, background-color 0.12s ease, color 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    background-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .button:hover,
@@ -594,7 +590,9 @@ select:focus {
   font-size: 13px;
   font-weight: 700;
   transform: none;
-  transition: opacity 0.12s ease, box-shadow 0.16s ease;
+  transition:
+    opacity 0.12s ease,
+    box-shadow 0.16s ease;
 }
 
 .run-query-button.is-running {
@@ -667,7 +665,9 @@ select:focus {
   gap: 2px;
   padding: 6px 8px;
   text-align: left;
-  transition: border-color 0.12s ease, background-color 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    background-color 0.12s ease;
 }
 
 .trace-list-item:hover {
@@ -971,7 +971,10 @@ button.scope-trail-item {
 }
 
 .copy-json-button {
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .copy-json-button.is-copied {
@@ -1332,7 +1335,7 @@ button.scope-trail-item {
   border: 1px solid var(--line);
 }
 
-.bar>span {
+.bar > span {
   display: block;
   height: 8px;
   background: linear-gradient(90deg, var(--accent-strong) 0%, var(--accent) 100%);
@@ -1639,7 +1642,9 @@ button.scope-trail-item {
   min-width: 130px;
   padding: 6px 8px;
   transform: translateY(0);
-  transition: opacity 0.06s ease, transform 0.06s ease;
+  transition:
+    opacity 0.06s ease,
+    transform 0.06s ease;
 }
 
 .timeline-tooltip-title {

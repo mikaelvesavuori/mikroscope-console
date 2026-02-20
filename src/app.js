@@ -411,7 +411,9 @@
   }
 
   function buildCommandPaletteActions() {
-    const queryPanelAction = elements.queryDetails?.open ? "Hide query controls" : "Show query controls";
+    const queryPanelAction = elements.queryDetails?.open
+      ? "Hide query controls"
+      : "Show query controls";
     const inspectPanelAction = elements.inspectDetails?.open
       ? "Hide inspect panel"
       : "Show inspect panel";
@@ -618,7 +620,10 @@
       button.className = "command-palette-item";
       button.dataset.commandIndex = String(index);
       button.setAttribute("role", "option");
-      button.setAttribute("aria-selected", index === state.commandPaletteActiveIndex ? "true" : "false");
+      button.setAttribute(
+        "aria-selected",
+        index === state.commandPaletteActiveIndex ? "true" : "false",
+      );
       if (index === state.commandPaletteActiveIndex) {
         button.classList.add("is-active");
       }
@@ -722,7 +727,8 @@
     if (event.isComposing || event.repeat) return;
     const key = safeText(event.key).toLowerCase();
     const isSpaceShortcut = key === " " || key === "space" || key === "spacebar";
-    const isCommandPaletteShortcut = key === "k" && (event.metaKey || event.ctrlKey) && !event.altKey;
+    const isCommandPaletteShortcut =
+      key === "k" && (event.metaKey || event.ctrlKey) && !event.altKey;
     if (isCommandPaletteShortcut) {
       event.preventDefault();
       toggleCommandPalette();
@@ -942,12 +948,16 @@
   }
 
   function extractLocalDatePart(value) {
-    const match = safeText(value).trim().match(/^(\d{4}-\d{2}-\d{2})/);
+    const match = safeText(value)
+      .trim()
+      .match(/^(\d{4}-\d{2}-\d{2})/);
     return match ? match[1] : "";
   }
 
   function extractLocalTimePart(value) {
-    const match = safeText(value).trim().match(/[T ](\d{2}:\d{2})(?::(\d{2}))?$/);
+    const match = safeText(value)
+      .trim()
+      .match(/[T ](\d{2}:\d{2})(?::(\d{2}))?$/);
     if (!match) return "";
     return normalizeTimeInput(`${match[1]}:${match[2] || "00"}`);
   }
@@ -1306,7 +1316,9 @@
       id: `${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
     });
     if (!snapshot) return;
-    state.recentScopes = state.recentScopes.filter((entry) => entry.signature !== snapshot.signature);
+    state.recentScopes = state.recentScopes.filter(
+      (entry) => entry.signature !== snapshot.signature,
+    );
     state.recentScopes.unshift(snapshot);
     if (state.recentScopes.length > MAX_RECENT_SCOPES) {
       state.recentScopes = state.recentScopes.slice(0, MAX_RECENT_SCOPES);
@@ -2056,7 +2068,10 @@
       return;
     }
     if (state.webhookHealth.error) {
-      setWebhookText(elements.webhookStatusNote, `Health unavailable: ${state.webhookHealth.error}`);
+      setWebhookText(
+        elements.webhookStatusNote,
+        `Health unavailable: ${state.webhookHealth.error}`,
+      );
       return;
     }
     if (state.webhookHealth.loadedAt) {
@@ -2172,10 +2187,19 @@
   function normalizeAlertPolicy(input) {
     const source = input && typeof input === "object" ? input : {};
     return {
-      cooldownMs: Math.max(1000, toFiniteNumber(source.cooldownMs, DEFAULT_ALERT_POLICY.cooldownMs)),
+      cooldownMs: Math.max(
+        1000,
+        toFiniteNumber(source.cooldownMs, DEFAULT_ALERT_POLICY.cooldownMs),
+      ),
       enabled: Boolean(source.enabled),
-      errorThreshold: Math.max(1, toFiniteNumber(source.errorThreshold, DEFAULT_ALERT_POLICY.errorThreshold)),
-      intervalMs: Math.max(1000, toFiniteNumber(source.intervalMs, DEFAULT_ALERT_POLICY.intervalMs)),
+      errorThreshold: Math.max(
+        1,
+        toFiniteNumber(source.errorThreshold, DEFAULT_ALERT_POLICY.errorThreshold),
+      ),
+      intervalMs: Math.max(
+        1000,
+        toFiniteNumber(source.intervalMs, DEFAULT_ALERT_POLICY.intervalMs),
+      ),
       noLogsThresholdMinutes: Math.max(
         0,
         toFiniteNumber(source.noLogsThresholdMinutes, DEFAULT_ALERT_POLICY.noLogsThresholdMinutes),
@@ -2193,7 +2217,10 @@
         toFiniteNumber(source.webhookTimeoutMs, DEFAULT_ALERT_POLICY.webhookTimeoutMs),
       ),
       webhookUrl: safeText(source.webhookUrl).trim(),
-      windowMinutes: Math.max(1, toFiniteNumber(source.windowMinutes, DEFAULT_ALERT_POLICY.windowMinutes)),
+      windowMinutes: Math.max(
+        1,
+        toFiniteNumber(source.windowMinutes, DEFAULT_ALERT_POLICY.windowMinutes),
+      ),
     };
   }
 
@@ -2377,7 +2404,10 @@
       }
       const payload = await response.json();
       const policySource =
-        payload && typeof payload === "object" && payload.policy && typeof payload.policy === "object"
+        payload &&
+        typeof payload === "object" &&
+        payload.policy &&
+        typeof payload.policy === "object"
           ? payload.policy
           : payload;
       state.webhookCrud.policy = normalizeAlertPolicy(policySource);
@@ -3331,7 +3361,9 @@
         alerting:
           payload?.alerting && typeof payload.alerting === "object" ? payload.alerting : null,
         alertPolicy:
-          payload?.alertPolicy && typeof payload.alertPolicy === "object" ? payload.alertPolicy : null,
+          payload?.alertPolicy && typeof payload.alertPolicy === "object"
+            ? payload.alertPolicy
+            : null,
         error: "",
         loadedAt: Date.now(),
         loading: false,

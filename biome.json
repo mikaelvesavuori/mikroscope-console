@@ -5,9 +5,7 @@
     "clientKind": "git"
   },
   "files": {
-    "includes": [
-      "src/**/*"
-    ]
+    "includes": ["src/**/*"]
   },
   "formatter": {
     "enabled": true,
