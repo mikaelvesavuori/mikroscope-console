@@ -4,6 +4,8 @@
 
 MikroScope Console is a static web UI for investigating logs, correlations, and time patterns without running a heavy observability stack.
 
+![Example of MikroScope UI](./mikroscope-example.png)
+
 ## What You Get
 
 - **Stream view**: Browse logs with expandable rows and load-more pagination.
