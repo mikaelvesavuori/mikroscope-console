@@ -2,6 +2,7 @@
   const state = {
     activeView: "stream",
     apiOrigin: "",
+    apiToken: "",
     commandPaletteActiveIndex: 0,
     commandPaletteQuery: "",
     correlationGroups: [],
@@ -835,20 +836,30 @@
   async function loadClientConfig() {
     try {
       const response = await fetch("./config.json", { cache: "no-store" });
-      if (!response.ok) return { apiOrigin: defaultApiOrigin() };
+      if (!response.ok) return { apiOrigin: defaultApiOrigin(), apiToken: "" };
       const data = await response.json();
       const configOrigin =
         typeof data.apiOrigin === "string" && data.apiOrigin.trim().length > 0
           ? trimTrailingSlash(data.apiOrigin.trim())
           : defaultApiOrigin();
-      return { apiOrigin: configOrigin };
+      const configToken =
+        typeof data.apiToken === "string" && data.apiToken.trim().length > 0
+          ? data.apiToken.trim()
+          : "";
+      return { apiOrigin: configOrigin, apiToken: configToken };
     } catch {
-      return { apiOrigin: defaultApiOrigin() };
+      return { apiOrigin: defaultApiOrigin(), apiToken: "" };
     }
   }
 
   function toApiUrl(path) {
     return `${state.apiOrigin}${path}`;
+  }
+
+  function authHeaders(extra = {}) {
+    return state.apiToken
+      ? { Authorization: `Bearer ${state.apiToken}`, ...extra }
+      : { ...extra };
   }
 
   function safeText(value) {
@@ -2176,6 +2187,7 @@
   async function fetchOpenApiDocument(signal) {
     const response = await fetch(toApiUrl("/openapi.json"), {
       cache: "no-store",
+      headers: authHeaders(),
       signal,
     });
     if (!response.ok) {
@@ -2397,7 +2409,7 @@
     state.webhookCrud.loading = true;
     renderWebhookCrudManager();
     try {
-      const response = await fetch(toApiUrl(getEndpoint.path), { cache: "no-store" });
+      const response = await fetch(toApiUrl(getEndpoint.path), { cache: "no-store", headers: authHeaders() });
       if (!response.ok) {
         const text = await response.text();
         throw new Error(`Config load failed (${response.status})${text ? `: ${text}` : ""}`);
@@ -2484,7 +2496,7 @@
     try {
       const response = await fetch(toApiUrl(endpoint.path), {
         body: JSON.stringify(payload),
-        headers: { "content-type": "application/json" },
+        headers: authHeaders({ "content-type": "application/json" }),
         method: endpoint.method,
       });
       if (!response.ok) {
@@ -2519,7 +2531,7 @@
     try {
       const response = await fetch(toApiUrl(endpoint.path), {
         body: JSON.stringify(payload),
-        headers: { "content-type": "application/json" },
+        headers: authHeaders({ "content-type": "application/json" }),
         method: endpoint.method,
       });
       if (!response.ok) {
@@ -2544,7 +2556,7 @@
     try {
       const response = await fetch(toApiUrl(endpoint.path), {
         body: JSON.stringify({ enabled: false, webhookUrl: null }),
-        headers: { "content-type": "application/json" },
+        headers: authHeaders({ "content-type": "application/json" }),
         method: endpoint.method,
       });
       if (!response.ok) {
@@ -3275,7 +3287,7 @@
       groupField: options.groupField || "",
       limit: options.limit,
     });
-    const response = await fetch(toApiUrl(`/api/logs/aggregate?${params.toString()}`), { signal });
+    const response = await fetch(toApiUrl(`/api/logs/aggregate?${params.toString()}`), { headers: authHeaders(), signal });
     if (!response.ok) {
       const text = await response.text();
       throw new Error(`Failed (${response.status}): ${text}`);
@@ -3348,6 +3360,7 @@
     try {
       const response = await fetch(toApiUrl("/health"), {
         cache: "no-store",
+        headers: authHeaders(),
         signal: controller.signal,
       });
       if (!response.ok) {
@@ -3401,7 +3414,7 @@
     syncQueryToUrl();
     const url = query ? toApiUrl(`/api/logs?${query}`) : toApiUrl("/api/logs");
     try {
-      const response = await fetch(url, { signal });
+      const response = await fetch(url, { headers: authHeaders(), signal });
       if (requestId !== state.logsRequestId) return false;
       if (!response.ok) {
         const text = await response.text();
@@ -3445,7 +3458,7 @@
     params.set("cursor", state.nextCursor);
     const url = toApiUrl(`/api/logs?${params.toString()}`);
     try {
-      const response = await fetch(url, { signal });
+      const response = await fetch(url, { headers: authHeaders(), signal });
       if (requestId !== state.logsRequestId) return false;
       if (!response.ok) {
         const text = await response.text();
@@ -4454,6 +4467,7 @@
     renderWebhookCrudManager();
     const config = await loadClientConfig();
     state.apiOrigin = config.apiOrigin;
+    state.apiToken = config.apiToken;
     setStatus(`Ready. API: ${state.apiOrigin}`);
     void refreshWebhookHealth();
     void refreshWebhookCrudCapabilities();

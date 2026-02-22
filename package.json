@@ -1,6 +1,6 @@
 {
   "name": "mikroscope-console",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A sharp, self-hosted console for MikroScope that turns logs into instant queries, timelines, and actionable alerts.",
   "keywords": [
     "mikroscope",
