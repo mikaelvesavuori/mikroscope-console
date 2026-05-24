@@ -1,5 +1,7 @@
 # MikroScope Console
 
+**ARCHIVED: Please use [MikroScope](https://github.com/mikaelvesavuori/mikroscope) instead, which in version 2 integrates package and console in a monorepo.**
+
 **A sharp, self-hosted console for [MikroScope](https://github.com/mikaelvesavuori/mikroscope) that turns logs into instant queries, timelines, and actionable alerts.**
 
 MikroScope Console is a static web UI for investigating logs, correlations, and time patterns without running a heavy observability stack.
